@@ -9,6 +9,7 @@
 #include "frames.h"
 #include "klatt.h"
 #include "render.h"
+#include "rules.h"
 
 #ifdef USESDL
 #include <SDL.h>
@@ -114,7 +115,9 @@ void PrintUsage()
     printf("    -wav filename        output to wav instead of libsdl\n");
     printf("    -sing            special treatment of pitch\n");
     printf("    -debug            print additional debug messages\n");
-    printf("    -engine sam|klatt    waveform generator (default=sam)\n");
+    printf("    -engine sam|klatt|rules  waveform generator (default=sam); rules = engine A:\n");
+    printf("                         a new rule-based front end (CMUdict, Klatt durations,\n");
+    printf("                         intonation) driving the Klatt synthesizer\n");
     printf("    -voice male|female   voice (klatt preset; with -engine sam: SAM's renderer with female data)\n");
     printf("    -range number        klatt: intonation range, 1 = SAM's (in semitones)\n");
     printf("    -bits number         klatt: retro output bit depth (0 = off, C64 SAM: 4)\n");
@@ -224,6 +227,8 @@ int main(int argc, char **argv)
 
     char* wavfilename = NULL;
     char input[256];
+    static char text[4096];         // engine A takes the text as typed, any length
+    int useRules = 0, voiceSet = 0;
 
     for(i=0; i<256; i++) input[i] = 0;
 
@@ -238,6 +243,11 @@ int main(int argc, char **argv)
     {
         if (argv[i][0] != '-')
         {
+            if (strlen(text) + strlen(argv[i]) + 2 < sizeof(text))
+            {
+                strcat(text, argv[i]);
+                strcat(text, " ");
+            }
             strncat(input, argv[i], 255);
             strncat(input, " ", 255);
         } else
@@ -259,6 +269,7 @@ int main(int argc, char **argv)
             {
                 if (strcmp(argv[i+1], "klatt") == 0) SetEngine(ENGINE_KLATT);
                 else if (strcmp(argv[i+1], "sam") == 0) SetEngine(ENGINE_SAM);
+                else if (strcmp(argv[i+1], "rules") == 0) { SetEngine(ENGINE_KLATT); useRules = 1; }
                 else { PrintUsage(); return 1; }
                 i++;
             } else
@@ -266,6 +277,7 @@ int main(int argc, char **argv)
             {
                 if (!KlattSetVoice(argv[i+1])) { printf("unknown voice %s\n", argv[i+1]); return 1; }
                 SetSamFemale(strcmp(argv[i+1], "female") == 0);
+                voiceSet = 1;
                 i++;
             } else
             if (strcmp(&argv[i][1], "range")==0 || strcmp(&argv[i][1], "bits")==0 ||
@@ -320,11 +332,13 @@ int main(int argc, char **argv)
             if (strcmp(&argv[i][1], "pitch")==0)
             {
                 SetPitch(atoi(argv[i+1]));
+                RulesSetPitch(atoi(argv[i+1]));
                 i++;
             } else
             if (strcmp(&argv[i][1], "speed")==0)
             {
                 SetSpeed(atoi(argv[i+1]));
+                RulesSetSpeed(atoi(argv[i+1]));
                 i++;
             } else
             if (strcmp(&argv[i][1], "mouth")==0)
@@ -346,12 +360,39 @@ int main(int argc, char **argv)
         i++;
     } //while
 
+    // engine A speaks female unless told otherwise; its voice parameters
+    // (-set, -range, -bits, -hold) apply to that voice
+    if (useRules && !voiceSet) KlattSetVoice("female");
+
     for (i = 0; i < nsets; i++)
         if (!KlattSetParam(setName[i], setValue[i]))
         {
             printf("unknown parameter %s (see -params)\n", setName[i]);
             return 1;
         }
+
+    if (useRules)
+    {
+#if defined(SAM_STREAM) && defined(KLATT_FIXED)
+        KlattSetSink(CollectKlatt);
+#endif
+        KlattReset();
+        if (!RulesSpeak(text)) { printf("nothing to say\n"); return 1; }
+        if (!debug) printf("%s\n", RulesPhonemes());
+#ifdef SAM_STREAM
+        KlattFinishOutput();
+        if (wavfilename != NULL && streamKlattLength > 0)
+        {
+            float *f = (float *)malloc(streamKlattLength * sizeof(float));
+            for (i = 0; i < streamKlattLength; i++) f[i] = streamKlatt[i] / 32768.0f;
+            WriteWav16(wavfilename, f, streamKlattLength);
+        }
+#else
+        KlattFinishOutput();
+        if (wavfilename != NULL) WriteWav16(wavfilename, KlattGetBuffer(), KlattGetBufferLength());
+#endif
+        return 0;
+    }
 
     for(i=0; input[i] != 0; i++)
         input[i] = toupper((int)input[i]);

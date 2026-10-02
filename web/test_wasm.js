@@ -45,7 +45,7 @@ function compare(name, a, b) {
 
   const run = (voice, engine, params = {}) => {
     s.setSam({});
-    if (engine === "klatt") {
+    if (engine === "klatt" || engine === "rules") {
       s.setVoice(voice);
       for (const [k, v] of Object.entries(params)) s.setParam(k, v);
     }
@@ -59,6 +59,8 @@ function compare(name, a, b) {
   ok &= compare("female, rd=0.8 f0Scale=2",
     run("female", "klatt", { rd: 0.8, f0Scale: 2 }),
     nativeRender(["-engine", "klatt", "-voice", "female", "-set", "rd=0.8", "-set", "f0Scale=2"]));
+  ok &= compare("engine A, female", run("female", "rules"), nativeRender(["-engine", "rules", "-voice", "female"]));
+  ok &= compare("engine A, male", run("male", "rules"), nativeRender(["-engine", "rules", "-voice", "male"]));
   ok &= compare("female, bits=4 hold=2",
     run("female", "klatt", { bits: 4, hold: 2 }),
     nativeRender(["-engine", "klatt", "-voice", "female", "-bits", "4", "-hold", "2"]));

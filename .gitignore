@@ -21,3 +21,9 @@ pico/bench/bench.sym
 # copy of web/female_sam.html published as a claude.ai artifact
 web/artifact.html
 _site/
+
+# data for the generators and calibration (download: see README.md, "Data")
+data/arctic/
+data/cmudict.dict
+data/cmudict.LICENSE
+data/vowdata.dat

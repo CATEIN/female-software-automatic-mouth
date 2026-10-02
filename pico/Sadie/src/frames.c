@@ -1,6 +1,7 @@
 // Copied from ../../../src by tools/sync_pico.py; edit the original.
 #define KLATT_FIXED
 #define SAM_STREAM
+#define LEX_SMALL
 #include <stdio.h>
 #include "frames.h"
 

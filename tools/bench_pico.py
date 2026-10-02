@@ -18,7 +18,8 @@ from unicorn.arm_const import UC_ARM_REG_R0, UC_ARM_REG_R1
 HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pico", "bench")
 CLOCK = 133e6
 RATE = 22050
-VOICES = ["Sadie (fixed-point Klatt)", "Male (fixed-point Klatt)", "Sadie '82 (SAM renderer)", "SAM (original)"]
+VOICES = ["Sadie, SAM front end", "Male, SAM front end", "Sadie '82 (SAM renderer)", "SAM (original)",
+          "Sadie, engine A", "Sadie, engine A, neural"]
 
 
 def load_elf(path):

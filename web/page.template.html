@@ -296,6 +296,13 @@
         </div>
         <label class="check"><input type="checkbox" id="phonetic"> Phonetic input</label>
       </div>
+      <div class="row" id="frontend-row">
+        <div class="seg" role="group" aria-label="Front end" id="frontend">
+          <button type="button" data-frontend="a" aria-pressed="true" title="Engine A: CMUdict pronunciations, Klatt's duration rules, intonation and coarticulation, calibrated on a real female speaker">New front end</button>
+          <button type="button" data-frontend="sam" aria-pressed="false" title="SAM's own 1982 text-to-phoneme rules, timing and pitch contour">SAM 1982 front end</button>
+        </div>
+        <span class="group-note" id="frontend-note">Pronunciation, timing and intonation for the Female and Male voices.</span>
+      </div>
 
       <textarea id="text" aria-label="Text to speak">Hello, how are you today? I hope you are feeling well.</textarea>
 
@@ -327,7 +334,7 @@
       <div class="status" id="status" role="status">Loading the synthesizer…</div>
 
       <div>
-        <div class="cap">Phonemes (SAM notation)</div>
+        <div class="cap" id="phonemes-cap">Phonemes (SAM notation)</div>
         <div class="readout" id="phonemes">—</div>
       </div>
 
@@ -381,7 +388,9 @@
   const $ = (id) => document.getElementById(id);
   // "sam" and "samfemale" use SAM's own 1982 renderer (no Klatt parameters)
   const is1982 = (v) => v === "sam" || v === "samfemale";
-  const engineFor = (v) => (is1982(v) ? v : "klatt");
+  // Female and Male: engine A ("rules", the default) or SAM's 1982 front end ("klatt")
+  let frontend = "a";
+  const engineFor = (v) => (is1982(v) ? v : frontend === "a" ? "rules" : "klatt");
   const statusEl = $("status");
 
   let sam = null;
@@ -411,7 +420,7 @@
           if (Math.abs(val - presets[v][k]) > 1e-9) changes[v][k] = val;
       }
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        voice, values: changes, samValues, text: $("text").value,
+        voice, frontend, values: changes, samValues, text: $("text").value,
         phonetic: $("phonetic").checked, auto: $("auto").checked,
       }));
     } catch (e) { /* storage unavailable: settings simply are not remembered */ }
@@ -501,9 +510,19 @@
       : (voice === "female" ? "Female" : "Male") + " voice parameters";
   }
 
+  function showFrontend() {
+    for (const b of document.querySelectorAll("#frontend button")) b.setAttribute("aria-pressed", String(b.dataset.frontend === frontend));
+    const a = !is1982(voice) && frontend === "a";
+    $("frontend-row").classList.toggle("rack-disabled", is1982(voice));
+    $("phonetic").disabled = a;
+    $("phonetic").parentElement.title = a ? "Phonetic input uses SAM's notation: switch to SAM's front end" : "";
+    $("phonemes-cap").textContent = a ? "Phonemes (ARPAbet, * = pitch accent, | = phrase break)" : "Phonemes (SAM notation)";
+  }
+
   function selectVoice(v) {
     voice = v;
-    for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(b.dataset.voice === v));
+    for (const b of document.querySelectorAll(".seg button[data-voice]")) b.setAttribute("aria-pressed", String(b.dataset.voice === v));
+    showFrontend();
     buildRack();
     updateCli();
     save();
@@ -672,7 +691,7 @@
   function cliText() {
     const parts = ["sam.exe"];
     if (voice === "samfemale") parts.push("-voice female");
-    else if (voice !== "sam") parts.push("-engine klatt", "-voice " + voice);
+    else if (voice !== "sam") parts.push(frontend === "a" ? "-engine rules" : "-engine klatt", "-voice " + voice);
     for (const c of SAM_CONTROLS) if (samValues[c.name] !== c.def) parts.push(`-${c.name} ${samValues[c.name]}`);
     if (samValues.sing) parts.push("-sing");
     if (!is1982(voice)) {
@@ -681,7 +700,7 @@
         if (Math.abs(v - presets[voice][p.name]) > 1e-9) parts.push(`-set ${p.name}=${+fmt(v, p)}`);
       }
     }
-    if ($("phonetic").checked) parts.push("-phonetic");
+    if ($("phonetic").checked && engineFor(voice) !== "rules") parts.push("-phonetic");
     parts.push("-wav out.wav");
     parts.push('"' + $("text").value.trim().replace(/"/g, "'") + '"');
     return parts.join(" ");
@@ -690,7 +709,12 @@
 
   // ---------- wiring ----------
   function wire() {
-    for (const b of document.querySelectorAll(".seg button")) b.addEventListener("click", () => { selectVoice(b.dataset.voice); if (lastAudio) speak(); });
+    for (const b of document.querySelectorAll(".seg button[data-voice]")) b.addEventListener("click", () => { selectVoice(b.dataset.voice); if (lastAudio) speak(); });
+    for (const b of document.querySelectorAll("#frontend button")) b.addEventListener("click", () => {
+      frontend = b.dataset.frontend;
+      showFrontend(); updateCli(); save();
+      if (lastAudio) speak();
+    });
     $("speak").addEventListener("click", speak);
     $("replay").addEventListener("click", play);
     $("text").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); speak(); } });
@@ -701,6 +725,7 @@
       chip.addEventListener("click", () => {
         $("text").value = chip.dataset.text;
         $("phonetic").checked = !!chip.dataset.phonetic;
+        if (chip.dataset.phonetic && frontend === "a" && !is1982(voice)) { frontend = "sam"; showFrontend(); }
         updateCli(); save(); speak();
       });
     }
@@ -746,6 +771,7 @@
     if (typeof saved.text === "string" && saved.text.trim()) $("text").value = saved.text;
     $("phonetic").checked = !!saved.phonetic;
     if (typeof saved.auto === "boolean") $("auto").checked = saved.auto;
+    if (saved.frontend === "a" || saved.frontend === "sam") frontend = saved.frontend;
     buildSamControls();
     selectVoice(["female", "male", "samfemale", "sam"].includes(saved.voice) ? saved.voice : "female");
     // render once so the page opens with a spectrogram; audio waits for a click

@@ -7,6 +7,7 @@
 #include "sam.h"
 #include "klatt.h"
 #include "render.h"
+#include "rules.h"
 
 int debug = 0;
 static volatile unsigned samples;
@@ -16,6 +17,13 @@ void __attribute__((noipa)) BenchMark(int id, unsigned n) { __asm volatile("" ::
 
 static void Sink8(const unsigned char *s, int n) { int i; samples += n; for (i = 0; i < n; i++) checksum += s[i]; }
 static void Sink16(const short *s, int n) { int i; samples += n; for (i = 0; i < n; i++) checksum += s[i]; }
+
+static void SpeakRules(const char *text)
+{
+    KlattReset();
+    RulesSpeak(text);
+    KlattFinishOutput();
+}
 
 static void Speak(const char *text, int engine, int female)
 {
@@ -42,19 +50,20 @@ int main(void)
     int v;
     SetSamSink(Sink8);
     KlattSetSink(Sink16);
-    for (v = 0; v < 4; v++)
+    for (v = 0; v < 6; v++)
     {
-        int engine = v < 2 ? ENGINE_KLATT : ENGINE_SAM;
-        if (v == 0) KlattSetVoice("female");
+        int engine = v < 2 || v >= 4 ? ENGINE_KLATT : ENGINE_SAM;
+        if (v == 0 || v >= 4) KlattSetVoice("female");
+        if (v == 5) KlattSetParam("neural", 1);
         if (v == 1) KlattSetVoice("male");
         // first call includes the one-time setup (tables for the voice)
         samples = 0;
         BenchMark(10 + v, 0);
-        Speak(TEXT, engine, v == 2);
+        if (v >= 4) SpeakRules(TEXT); else Speak(TEXT, engine, v == 2);
         BenchMark(20 + v, samples);
         samples = 0;
         BenchMark(30 + v, 0);
-        Speak(TEXT, engine, v == 2);
+        if (v >= 4) SpeakRules(TEXT); else Speak(TEXT, engine, v == 2);
         BenchMark(40 + v, samples);
     }
     for (;;) BenchMark(-1, checksum);

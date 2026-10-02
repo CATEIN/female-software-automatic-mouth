@@ -4,7 +4,9 @@
 
 Arduino compiles every .c file in a sketch's src/ folder but has no project-wide
 defines, so each copied .c file gets the Pico configuration prepended:
-KLATT_FIXED (integer Klatt engine) and SAM_STREAM (streaming output).
+KLATT_FIXED (integer Klatt engine), SAM_STREAM (streaming output) and
+LEX_SMALL (engine A's lexicon keeps only the 40,000 most frequent words'
+exceptions; rarer words come from the letter-to-sound rules).
 main.c (the PC command line program) is left out.
 """
 import os, shutil
@@ -13,7 +15,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SRC = os.path.join(ROOT, "src")
 DST = os.path.join(ROOT, "pico", "Sadie", "src")
 HEADER = ("// Copied from ../../../src by tools/sync_pico.py; edit the original.\n"
-          "#define KLATT_FIXED\n#define SAM_STREAM\n")
+          "#define KLATT_FIXED\n#define SAM_STREAM\n#define LEX_SMALL\n")
 
 os.makedirs(DST, exist_ok=True)
 for name in os.listdir(DST):

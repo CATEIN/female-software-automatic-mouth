@@ -11,15 +11,16 @@
 #include "sam.h"
 #include "klatt.h"
 #include "render.h"
+#include "rules.h"
 
 #define EXPORT(name) __attribute__((export_name(name)))
 
 int debug = 0;          // referenced by render.c (defined in main.c for the CLI)
 extern int singmode;    // sam.c
 
-static char text[256];
+static char text[4096];     // engine A takes whole texts; SAM uses the first 250 characters
 static char scratch[128];   // parameter / voice names passed in from JavaScript
-static char phonemes[256];
+static char phonemes[4096];
 static float *samples = NULL;
 static int sampleCount = 0;
 
@@ -38,6 +39,8 @@ void WebSetSam(int speed, int pitch, int mouth, int throat, int sing)
     SetMouth((unsigned char)mouth);
     SetThroat((unsigned char)throat);
     singmode = sing;
+    RulesSetSpeed(speed);
+    RulesSetPitch(pitch);
 }
 
 EXPORT("web_set_voice") int WebSetVoice(const char *name) { return KlattSetVoice(name); }
@@ -51,13 +54,28 @@ EXPORT("web_param_min") double WebParamMin(int i) { return KlattParamMin(i); }
 EXPORT("web_param_max") double WebParamMax(int i) { return KlattParamMax(i); }
 
 // Speaks the text in web_text_buffer(). engine: 0 = original SAM, 1 = Klatt,
-// 2 = SAM's renderer with female data (the C64 female voice, sam.exe -voice female).
+// 2 = SAM's renderer with female data (the C64 female voice, sam.exe -voice female),
+// 3 = engine A: the rule-based front end driving the Klatt voice (sam.exe -engine rules).
 // Returns the number of samples, or -1 if SAM could not parse the input.
 EXPORT("web_speak")
 int WebSpeak(int phonetic, int engine)
 {
     char input[256];
     int i, n;
+
+    if (engine == 3)
+    {
+        SetEngine(ENGINE_KLATT);
+        KlattReset();
+        if (!RulesSpeak(text)) return -1;
+        strncpy(phonemes, RulesPhonemes(), sizeof(phonemes) - 1);
+        KlattFinishOutput();
+        n = KlattGetBufferLength();
+        samples = (float *)realloc(samples, (n > 0 ? n : 1) * sizeof(float));
+        memcpy(samples, KlattGetBuffer(), n * sizeof(float));
+        sampleCount = n;
+        return n;
+    }
 
     memset(input, 0, sizeof(input));
     strncpy(input, text, 250);

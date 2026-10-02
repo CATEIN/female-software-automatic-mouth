@@ -109,23 +109,25 @@
       return pieces;
     }
 
-    // engine: "klatt" (male/female voices), "sam" (original 1982 renderer) or
-    // "samfemale" (1982 renderer, female data)
+    // engine: "rules" (engine A: new front end + Klatt voice), "klatt" (SAM's
+    // front end + Klatt voice), "sam" (original 1982 renderer) or "samfemale"
+    // (1982 renderer, female data)
     function speak(text, opts) {
       opts = opts || {};
       // "sam": original renderer, "samfemale": the same renderer with female
       // data (the C64 voice), anything else: the Klatt voices
-      const engine = opts.engine === "sam" ? 0 : opts.engine === "samfemale" ? 2 : 1;
+      const engine = opts.engine === "sam" ? 0 : opts.engine === "samfemale" ? 2 : opts.engine === "rules" ? 3 : 1;
       const phonetic = !!opts.phonetic;
       // SAM understands plain ASCII only
       const clean = text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
         .replace(/[–—]/g, ", ").replace(/[^\x20-\x7e]/g, " ");
-      const pieces = phonetic ? [clean.slice(0, 240)] : splitText(clean, 200);
+      // engine A reads whole texts; SAM's front end needs pieces of ~200 characters
+      const pieces = engine === 3 ? [clean.slice(0, 4000)] : phonetic ? [clean.slice(0, 240)] : splitText(clean, 200);
       const chunks = [], phonemes = [];
       let total = 0;
       for (const piece of pieces) {
         writeString(e.web_text_buffer(), e.web_text_capacity(), piece);
-        const n = e.web_speak(phonetic ? 1 : 0, engine);
+        const n = e.web_speak(phonetic && engine !== 3 ? 1 : 0, engine);
         if (n < 0) throw new Error("SAM could not read: " + piece);
         chunks.push(new Float32Array(memory.buffer, e.web_samples(), n).slice());
         phonemes.push(readString(e.web_phonemes()));

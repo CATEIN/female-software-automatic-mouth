@@ -2,10 +2,12 @@
 // and the Pico speaks it through PWM audio on GPIO 0.
 //
 // Voices (switch at any time):
-//   Sadie      the full female rewrite: fixed-point Klatt formant synthesizer
+//   Sadie      the full female rewrite: fixed-point Klatt formant synthesizer,
+//              driven by engine A (CMUdict pronunciations, Klatt durations,
+//              intonation) or, with "#frontend sam", by SAM's 1982 front end
 //   Sadie '82  SAM's own 1982 renderer with female data (as on the C64)
 //   SAM        the original 1982 voice
-//   Male       the Klatt engine's male reference voice
+//   Male       the Klatt engine's male reference voice (front end as Sadie)
 //
 // Audio goes out either as PWM on GPIO 0 (filter + amplifier, see README.md)
 // or, with "#usb 1", over the USB cable to the PC, where tools/pico_speak.py
@@ -24,6 +26,7 @@ extern "C" {
 #include "src/sam.h"
 #include "src/klatt.h"
 #include "src/render.h"
+#include "src/rules.h"
 int debug = 0;          // referenced by the synthesizer's debug output
 extern int singmode;    // sam.c
 }
@@ -37,6 +40,7 @@ enum { VOICE_SADIE, VOICE_SADIE82, VOICE_SAM, VOICE_MALE };
 static const char *voiceNames[] = {"Sadie", "Sadie '82", "SAM", "Male (Klatt)"};
 static int voice = VOICE_SADIE;
 static bool phonetic = false;
+static bool frontendA = true;           // Sadie / Male: engine A (else SAM's front end)
 static unsigned char speed = 72, pitch = 64, mouth = 128, throat = 128;
 
 static char line[256];
@@ -105,8 +109,10 @@ static void Help()
         "  #1 Sadie   #2 Sadie '82   #3 SAM   #4 Male (Klatt)\n"
         "  #speed N  #pitch N  #mouth N  #throat N   (SAM settings, 1..255; defaults 72 64 128 128)\n"
         "  #sing     toggle SAM's sing mode\n"
-        "  #phonetic toggle phoneme input (e.g. /HEHLOW)\n"
-        "  #set name=value   Klatt parameter (rd, f0Scale, breath, bits, hold, ...)\n"
+        "  #frontend a|sam   Sadie / Male: new front end (engine A, default) or SAM's 1982 one\n"
+        "  #phonetic toggle phoneme input in SAM's notation (e.g. /HEHLOW; SAM front end)\n"
+        "  #set name=value   Klatt parameter (rd, f0Scale, breath, bits, hold, ...);\n"
+        "            #set neural=1 uses the neural voice source (a real woman's pulse shapes)\n"
         "  #params   list Klatt parameters      #? this help\n"
         "  #usb 1    send audio to the PC (used by tools/pico_speak.py), #usb 0 back to PWM");
 }
@@ -122,6 +128,22 @@ static bool Speak(const char *text)
     char input[256];
     int i;
     uint32_t t0, total;
+    bool klatt = voice == VOICE_SADIE || voice == VOICE_MALE;
+
+    if (klatt && frontendA && !phonetic)
+    {
+        // engine A: the whole line goes to the rule-based front end
+        RulesSetSpeed(speed);
+        RulesSetPitch(pitch);
+        waitMicros = 0;
+        samplesOut = 0;
+        t0 = micros();
+        KlattReset();
+        if (!RulesSpeak(text)) return false;
+        KlattFinishOutput();
+        Serial.printf("%s\n", RulesPhonemes());
+        goto finish;
+    }
 
     memset(input, 0, sizeof(input));
     strncpy(input, text, 250);
@@ -137,7 +159,7 @@ static bool Speak(const char *text)
     SetPitch(pitch);
     SetMouth(mouth);
     SetThroat(throat);
-    SetEngine(voice == VOICE_SADIE || voice == VOICE_MALE ? ENGINE_KLATT : ENGINE_SAM);
+    SetEngine(klatt ? ENGINE_KLATT : ENGINE_SAM);
     SetSamFemale(voice == VOICE_SADIE82);
 
     waitMicros = 0;
@@ -148,6 +170,7 @@ static bool Speak(const char *text)
     if (!SAMMain()) return false;
     SamStreamFlush();
     KlattFinishOutput();
+finish:
     if (usbAudio)
     {
         if (usbCount) UsbSend(usbCount);
@@ -182,6 +205,8 @@ static void Command(char *cmd)
     else if (sscanf(cmd, "mouth %d", &n) == 1) mouth = constrain(n, 0, 255);
     else if (sscanf(cmd, "throat %d", &n) == 1) throat = constrain(n, 0, 255);
     else if (!strcmp(cmd, "sing")) { singmode = !singmode; Serial.printf("sing mode %s\n", singmode ? "on" : "off"); }
+    else if (!strcmp(cmd, "frontend a")) { frontendA = true; Serial.println("front end: engine A (new)"); }
+    else if (!strcmp(cmd, "frontend sam")) { frontendA = false; Serial.println("front end: SAM 1982"); }
     else if (!strcmp(cmd, "phonetic")) { phonetic = !phonetic; Serial.printf("phonetic input %s\n", phonetic ? "on" : "off"); }
     else if (sscanf(cmd, "set %31[^=]=%f", name, &value) == 2)
     {

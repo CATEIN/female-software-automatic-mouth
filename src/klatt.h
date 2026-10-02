@@ -17,6 +17,7 @@ void SetSamFemale(int on); // SAM renderer: female tables (render.c)
 
 // Selects a voice preset by name ("male", "female"). Returns 0 if unknown.
 int KlattSetVoice(const char *name);
+const char *KlattVoiceName(void);   // "female" or "male"
 
 void KlattSetTestMode(int mode);
 
@@ -50,6 +51,26 @@ void KlattRenderSamFrames(SamFrame *frames, int n, const SamBlend *blends, int n
 // flushes the last block.
 typedef void (*KlattSink)(const short *samples, int n);
 void KlattSetSink(KlattSink sink);
+
+// Frame-by-frame input, for front ends other than SAM's (engine A, rules.c).
+// Each pushed frame is rendered when the next one arrives, with its
+// parameters moving toward the next frame's (formants and F0 across the
+// frame, amplitudes over its last 4 ms). KlattEndFrames() fades the last one
+// out. Memory use does not depend on the utterance length.
+typedef struct
+{
+    float f0;                   // Hz
+    float f[3];                 // F1..F3 in Hz; F4 and up come from the voice
+    float av;                   // voicing amplitude (1 = a full vowel)
+    float ah;                   // aspiration into the vocal tract filters
+    float af;                   // frication into the parallel bank
+    float nasal;                // 0..1, opens the nasal zero
+    unsigned char fricClass;    // 1 s z (t), 2 sh zh ch jh (k), 3 f th v dh (p)
+    unsigned short samples;     // frame length in output samples
+} KlattFrame;
+void KlattBeginFrames(void);
+void KlattPushFrame(const KlattFrame *frame);
+void KlattEndFrames(void);
 
 // Rendered audio, -1..1 floats at KLATT_SAMPLE_RATE.
 float *KlattGetBuffer();

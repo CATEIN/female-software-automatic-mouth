@@ -1,6 +1,7 @@
 // Copied from ../../../src by tools/sync_pico.py; edit the original.
 #define KLATT_FIXED
 #define SAM_STREAM
+#define LEX_SMALL
 #include "female.h"
 
 enum { H_MEAN, H_IY, H_IH, H_EI, H_EH, H_AE, H_AH, H_AW, H_OA, H_OO, H_UW, H_UH, H_ER };

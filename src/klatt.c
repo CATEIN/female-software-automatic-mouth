@@ -22,6 +22,7 @@
 #include <string.h>
 #include "klatt.h"
 #include "female.h"
+#include "glottal.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -82,6 +83,7 @@ typedef struct
     double voicedFrication;   // relative level in Z, ZH, V, DH, J
     FricShape fric[NFRIC];
     double formantShift[3];   // extra F1..F3 multipliers on top of formantRatio
+    double neural;            // glottal pulse: 0 = LF model .. 1 = neural (real voice, glottal.c)
 } Voice;
 
 // Male reference voice: reproduces SAM's own formant data through resonators.
@@ -199,6 +201,12 @@ static void EnsureVoice()
     if (!voiceLoaded) KlattSetVoice("male");
 }
 
+const char *KlattVoiceName(void)
+{
+    EnsureVoice();
+    return current.name;
+}
+
 // ---------------------------------------------------------------------------
 // Named parameters of the current voice
 
@@ -219,6 +227,7 @@ static const KlattParam params[] =
     {"jitter", "Source", "Period-to-period pitch variation", &current.jitter, 0, 0.05},
     {"shimmer", "Source", "Period-to-period loudness variation", &current.shimmer, 0, 0.2},
     {"flutter", "Source", "Slow pitch wander (Klatt FL)", &current.flutter, 0, 100},
+    {"neural", "Source", "Pulse shape: 0 = LF model, 1 = a real woman's pulses (CMU ARCTIC slt) predicted by a tiny network", &current.neural, 0, 1},
     {"f1Shift", "Vocal tract", "Multiplies F1 on top of the voice's ratios", &current.formantShift[0], 0.6, 1.6},
     {"f2Shift", "Vocal tract", "Multiplies F2 on top of the voice's ratios", &current.formantShift[1], 0.6, 1.6},
     {"f3Shift", "Vocal tract", "Multiplies F3 on top of the voice's ratios", &current.formantShift[2], 0.6, 1.6},
@@ -571,6 +580,21 @@ static void BuildVoiceFormants(SamFrame *frames, int n, const SamBlend *blends, 
     }
 }
 
+static void FrameToTarget(const KlattFrame *in, Target *t)
+{
+    int k;
+    memset(t, 0, sizeof(*t));
+    t->f0 = in->f0;
+    for (k = 0; k < 3; k++) t->f[k] = in->f[k];
+    for (k = 3; k < NFORMANTS; k++) t->f[k] = voice->fixed[k];
+    t->av = in->av;
+    t->ah = in->ah;
+    t->af = in->af;
+    t->nasal = in->nasal;
+    t->fricClass = in->fricClass < NFRIC ? in->fricClass : 0;
+    t->samples = in->samples;
+}
+
 #ifdef KLATT_FIXED
 #include "klatt_fixed.h"
 #else
@@ -584,6 +608,9 @@ static AntiResonator nasalZero;
 static Resonator fricBank[NFRIC][3];
 
 static LFPulse pulse;
+static float neuralPulse[GLOTTAL_N + 1];   // this period's neural pulse, rotated to the LF timing
+static double neuralPeakFlow = 1;
+static int neuralRun = 0;                   // periods since voicing began
 static double glottalPos = 0, glottalPeriod = 0, glottalAmp = 1;
 static double glottalFlow = 0;
 static double flutterTime = 0;
@@ -627,6 +654,7 @@ void KlattReset()
     initialized = 0;
     glottalPos = glottalPeriod = glottalFlow = flutterTime = tiltState = 0;
     glottalAmp = 1;
+    neuralRun = 0;
     dcIn = dcOut = 0;
     rngState = 0x12345678;
 }
@@ -658,11 +686,145 @@ void KlattFinishOutput()
 
 static double Lerp(double a, double b, double t) { return a + (b - a) * t; }
 
+// A new neural pulse for the period that starts now. The network's pulse
+// runs from one glottal closure to the next; it is rotated so the closure
+// falls where the LF pulse has it (te), so the two can be blended.
+static void NeuralPeriod(double f0, double av, double avNext, double nasal, int fricative)
+{
+    float raw[GLOTTAL_N];
+    double flow = 0, peak = 1e-9;
+    int i, shift = (int)(pulse.te * GLOTTAL_N + 0.5);
+    neuralRun = av > 0.05 ? neuralRun + 1 : 0;
+    GlottalPulse(f0, av, avNext, nasal, fricative, neuralRun, raw);
+    for (i = 0; i < GLOTTAL_N; i++)
+    {
+        neuralPulse[i] = raw[(i - shift + GLOTTAL_N) % GLOTTAL_N];
+        flow += neuralPulse[i] / GLOTTAL_N;
+        if (flow > peak) peak = flow;
+    }
+    neuralPulse[GLOTTAL_N] = neuralPulse[0];
+    neuralPeakFlow = peak;
+}
+
+static double NeuralAt(double t)
+{
+    double pos = t * GLOTTAL_N;
+    int i = (int)pos;
+    if (i >= GLOTTAL_N) i = GLOTTAL_N - 1;
+    return neuralPulse[i] + (neuralPulse[i + 1] - neuralPulse[i]) * (pos - i);
+}
+
+// Renders one frame, moving its parameters toward the next frame's.
+static void RenderSegment(const Target *t0, const Target *t1)
+{
+    int k, c;
+    int len = (int)(t0->samples + 0.5);
+    double ramp = AMP_RAMP * SR;
+    double f0 = t0->f0, av = 0, ah = 0, nasal = 0;
+    double classAmp[NFRIC];
+    int s;
+
+    if (ramp > len) ramp = len;
+
+    for (s = 0; s < len; s++)
+    {
+        double excitation, out, fric, src, t, noise, flowMod;
+
+        if (s % UPDATE_INTERVAL == 0)
+        {
+            double pos = (double)s / len;
+            // amplitudes hold, then ramp to the next frame at the end
+            double amp = s < len - ramp ? 0.0 : (s - (len - ramp)) / ramp;
+            for (k = 0; k < NFORMANTS; k++)
+                ResonatorSet(&cascade[k], Lerp(t0->f[k], t1->f[k], pos), voice->b[k]);
+            f0 = Lerp(t0->f0, t1->f0, pos);
+            av = Lerp(t0->av, t1->av, amp);
+            ah = Lerp(t0->ah, t1->ah, amp);
+            nasal = Lerp(t0->nasal, t1->nasal, amp);
+            for (c = 0; c < NFRIC; c++)
+                classAmp[c] = (t0->fricClass == c ? t0->af : 0) * (1 - amp)
+                            + (t1->fricClass == c ? t1->af : 0) * amp;
+            AntiResonatorSet(&nasalZero, Lerp(270, voice->nasalZero, nasal), 100);
+        }
+
+        // glottal source: one LF pulse per period
+        if (glottalPos >= glottalPeriod)
+        {
+            // Klatt's flutter: slow quasi-random F0 wander
+            double fl = voice->flutter / 5000.0 * (sin(2 * M_PI * 12.7 * flutterTime)
+                      + sin(2 * M_PI * 7.1 * flutterTime) + sin(2 * M_PI * 4.7 * flutterTime));
+            glottalPos -= glottalPeriod;
+            if (glottalPos < 0 || glottalPos >= 1) glottalPos = 0;
+            glottalPeriod = SR / (f0 * (1 + fl)) * (1 + voice->jitter * Gauss());
+            glottalAmp = 1 + voice->shimmer * Gauss();
+            glottalFlow = 0;
+            if (voice->neural > 0)
+            {
+                double af = 0;
+                for (c = 0; c < NFRIC; c++) af += classAmp[c];
+                NeuralPeriod(SR / glottalPeriod, av, t1->av, nasal, af > 0 && av > 0);
+            }
+        }
+        t = glottalPos / glottalPeriod;
+        src = LFSample(&pulse, t) * pulse.gain;
+        if (voice->neural > 0) src += (NeuralAt(t) - src) * voice->neural;
+        src *= glottalAmp;
+        glottalPos++;
+        flutterTime += 1 / SR;
+        tiltState = (1 - voice->tilt) * src + voice->tilt * tiltState;
+
+        // aspiration follows the glottal flow (Klatt & Klatt 1990)
+        glottalFlow += src / glottalPeriod;
+        flowMod = glottalFlow / (voice->neural > 0 ? pulse.peakFlow + (neuralPeakFlow - pulse.peakFlow) * voice->neural
+                                                   : pulse.peakFlow);
+        if (flowMod < 0) flowMod = 0;
+        flowMod = 0.1 + 0.9 * flowMod;
+
+        excitation = av * (testMode == KLATT_TEST_NOISE ? Noise() : tiltState);
+        excitation += av * voice->breath * Noise() * flowMod;
+        if (testMode == KLATT_TEST_SOURCE)
+        {
+            Emit(excitation);
+            continue;
+        }
+        excitation += ah * Noise();
+
+        out = AntiResonatorRun(&nasalZero, ResonatorRun(&nasalPole, excitation));
+        for (k = NFORMANTS - 1; k >= 0; k--) out = ResonatorRun(&cascade[k], out);
+
+        // frication: parallel bank, modulated by the glottal cycle when voiced
+        fric = 0;
+        noise = Noise() * (av > 0 ? 0.5 + 0.5 * flowMod : 1.0);
+        for (c = 1; c < NFRIC; c++)
+        {
+            double y = voice->fric[c].bypass * noise;
+            if (classAmp[c] == 0)
+            {
+                // keep the filters ringing down but skip the output
+                for (k = 0; k < 3; k++)
+                    if (voice->fric[c].gain[k] != 0) ResonatorRun(&fricBank[c][k], 0);
+                continue;
+            }
+            for (k = 0; k < 3; k++)
+                if (voice->fric[c].gain[k] != 0)
+                    y += voice->fric[c].gain[k] * ResonatorRun(&fricBank[c][k], noise);
+            fric += classAmp[c] * y;
+        }
+
+        out = out * 0.1 + fric;
+
+        // DC blocker
+        dcOut = out - dcIn + 0.995 * dcOut;
+        dcIn = out;
+        Emit(dcOut);
+    }
+}
+
 void KlattRenderSamFrames(SamFrame *frames, int n, const SamBlend *blends, int nblends,
                           unsigned char speed, int *frameStart)
 {
     static Target targets[257];
-    int i, k, c;
+    int i;
 
     EnsureVoice();
     if (!initialized) Init();
@@ -676,102 +838,39 @@ void KlattRenderSamFrames(SamFrame *frames, int n, const SamBlend *blends, int n
 
     for (i = 0; i < n; i++)
     {
-        const Target *t0 = &targets[i];
-        const Target *t1 = &targets[i + 1];
-        int len = (int)(t0->samples + 0.5);
-        double ramp = AMP_RAMP * SR;
-        double f0 = t0->f0, av = 0, ah = 0, nasal = 0;
-        double classAmp[NFRIC];
-        int s;
-
         frameStart[i] = outLength;
-        if (ramp > len) ramp = len;
-
-        for (s = 0; s < len; s++)
-        {
-            double excitation, out, fric, src, t, noise, flowMod;
-
-            if (s % UPDATE_INTERVAL == 0)
-            {
-                double pos = (double)s / len;
-                // amplitudes hold, then ramp to the next frame at the end
-                double amp = s < len - ramp ? 0.0 : (s - (len - ramp)) / ramp;
-                for (k = 0; k < NFORMANTS; k++)
-                    ResonatorSet(&cascade[k], Lerp(t0->f[k], t1->f[k], pos), voice->b[k]);
-                f0 = Lerp(t0->f0, t1->f0, pos);
-                av = Lerp(t0->av, t1->av, amp);
-                ah = Lerp(t0->ah, t1->ah, amp);
-                nasal = Lerp(t0->nasal, t1->nasal, amp);
-                for (c = 0; c < NFRIC; c++)
-                    classAmp[c] = (t0->fricClass == c ? t0->af : 0) * (1 - amp)
-                                + (t1->fricClass == c ? t1->af : 0) * amp;
-                AntiResonatorSet(&nasalZero, Lerp(270, voice->nasalZero, nasal), 100);
-            }
-
-            // glottal source: one LF pulse per period
-            if (glottalPos >= glottalPeriod)
-            {
-                // Klatt's flutter: slow quasi-random F0 wander
-                double fl = voice->flutter / 5000.0 * (sin(2 * M_PI * 12.7 * flutterTime)
-                          + sin(2 * M_PI * 7.1 * flutterTime) + sin(2 * M_PI * 4.7 * flutterTime));
-                glottalPos -= glottalPeriod;
-                if (glottalPos < 0 || glottalPos >= 1) glottalPos = 0;
-                glottalPeriod = SR / (f0 * (1 + fl)) * (1 + voice->jitter * Gauss());
-                glottalAmp = 1 + voice->shimmer * Gauss();
-                glottalFlow = 0;
-            }
-            t = glottalPos / glottalPeriod;
-            src = LFSample(&pulse, t) * pulse.gain * glottalAmp;
-            glottalPos++;
-            flutterTime += 1 / SR;
-            tiltState = (1 - voice->tilt) * src + voice->tilt * tiltState;
-
-            // aspiration follows the glottal flow (Klatt & Klatt 1990)
-            glottalFlow += src / glottalPeriod;
-            flowMod = glottalFlow / pulse.peakFlow;
-            if (flowMod < 0) flowMod = 0;
-            flowMod = 0.1 + 0.9 * flowMod;
-
-            excitation = av * (testMode == KLATT_TEST_NOISE ? Noise() : tiltState);
-            excitation += av * voice->breath * Noise() * flowMod;
-            if (testMode == KLATT_TEST_SOURCE)
-            {
-                Emit(excitation);
-                continue;
-            }
-            excitation += ah * Noise();
-
-            out = AntiResonatorRun(&nasalZero, ResonatorRun(&nasalPole, excitation));
-            for (k = NFORMANTS - 1; k >= 0; k--) out = ResonatorRun(&cascade[k], out);
-
-            // frication: parallel bank, modulated by the glottal cycle when voiced
-            fric = 0;
-            noise = Noise() * (av > 0 ? 0.5 + 0.5 * flowMod : 1.0);
-            for (c = 1; c < NFRIC; c++)
-            {
-                double y = voice->fric[c].bypass * noise;
-                if (classAmp[c] == 0)
-                {
-                    // keep the filters ringing down but skip the output
-                    for (k = 0; k < 3; k++)
-                        if (voice->fric[c].gain[k] != 0) ResonatorRun(&fricBank[c][k], 0);
-                    continue;
-                }
-                for (k = 0; k < 3; k++)
-                    if (voice->fric[c].gain[k] != 0)
-                        y += voice->fric[c].gain[k] * ResonatorRun(&fricBank[c][k], noise);
-                fric += classAmp[c] * y;
-            }
-
-            out = out * 0.1 + fric;
-
-            // DC blocker
-            dcOut = out - dcIn + 0.995 * dcOut;
-            dcIn = out;
-            Emit(dcOut);
-        }
+        RenderSegment(&targets[i], &targets[i + 1]);
     }
     frameStart[n] = outLength;
+}
+
+static Target pendingFrame;
+static int havePending = 0;
+
+void KlattBeginFrames(void)
+{
+    EnsureVoice();
+    if (!initialized) Init();
+    havePending = 0;
+}
+
+void KlattPushFrame(const KlattFrame *frame)
+{
+    Target t;
+    FrameToTarget(frame, &t);
+    if (havePending) RenderSegment(&pendingFrame, &t);
+    pendingFrame = t;
+    havePending = 1;
+}
+
+void KlattEndFrames(void)
+{
+    Target last;
+    if (!havePending) return;
+    last = pendingFrame;
+    last.av = last.ah = last.af = 0;
+    RenderSegment(&pendingFrame, &last);
+    havePending = 0;
 }
 
 float *KlattGetBuffer() { return outBuffer; }

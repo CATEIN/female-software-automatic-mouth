@@ -5,10 +5,10 @@ runs on the Pico itself, in real time:
 
 | # | Voice | Engine | CPU load* |
 |---|-------|--------|-----------|
-| 1 | **Sadie** | the full female rewrite: Klatt formant synthesizer, in fixed point | ~37 % |
+| 1 | **Sadie** | the full female rewrite: Klatt formant synthesizer in fixed point, with engine A's front end | ~42 % (37 % with SAM's front end, 48 % with the neural source) |
 | 2 | **Sadie '82** | SAM's own 1982 renderer with female data (the C64 voice) | ~6 % |
 | 3 | SAM | the original 1982 voice | ~6 % |
-| 4 | Male | the Klatt engine's male reference voice | ~37 % |
+| 4 | Male | the Klatt engine's male reference voice | ~42 % |
 
 \* one Cortex-M0+ core at 133 MHz, 22050 Hz output, estimated by
 `tools/bench_pico.py` (see below). Both cores are free otherwise; only one
@@ -64,7 +64,7 @@ arduino-cli compile --fqbn rp2040:rp2040:rpipico --output-dir pico/build pico/Sa
 Then hold BOOTSEL while plugging the Pico in and copy
 `pico/build/Sadie.ino.uf2` to the RPI-RP2 drive that appears.
 
-Size: about 96 KB of flash (of 2 MB) and 100 KB of RAM (of 264 KB).
+Size: about 544 KB of flash (of 2 MB; most of it engine A's lexicon) and 131 KB of RAM (of 264 KB).
 
 `pico/Sadie/src/` is a copy of the project's `src/`. After changing the
 synthesizer, run `python tools/sync_pico.py` before building. The script
@@ -80,6 +80,9 @@ startup the Pico says "Hello, I am Sadie." Type text and press Enter.
 #1 #2 #3 #4         Sadie, Sadie '82, SAM, Male
 #speed 72  #pitch 64  SAM's settings; speed and pitch apply to Sadie too
 #mouth 128  #throat 128
+#frontend a         Sadie / Male: engine A, the new front end (default)
+#frontend sam       Sadie / Male: SAM's 1982 front end
+#set neural=1       the neural voice source (0 = LF pulse, default)
 #sing               SAM's sing mode on/off
 #phonetic           type phonemes instead of text (e.g. /HEHLOW)
 #set rd=1.5         any Klatt parameter: rd, f0Scale, breath, tilt, bits, hold, ...

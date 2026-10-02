@@ -43,6 +43,56 @@ New options:
 | `-testnoise` | white-noise excitation, used to measure the filters |
 | `-testsource` | output the voicing source only (no vocal tract) |
 
+## Engine A: a new front end
+
+`sam.exe -engine rules` (`src/rules.c`) replaces SAM's 1982 front end (text-to-phoneme rules, timing, pitch contour) for the Klatt voices, in the style of MITalk/DECtalk (Allen, Hunnicutt & Klatt 1987; Klatt 1987). It drives the same Klatt synthesizer frame by frame.
+
+- **Pronunciation:** CMUdict (BSD licence), stored as letter-to-sound decision trees learned from the dictionary plus the words they get wrong (`src/lexdata.h`, built by `tools/gen_lexicon.py`). Every dictionary word comes out exactly as in CMUdict (all 124,925 checked by `tools/test_lexicon.c`), and unknown words get a guess that is right about 47% of the time (58% ignoring stress). The Pico build keeps the exceptions of the 40,000 most frequent words: 417 KB instead of 972 KB.
+- **Text:** numbers, a few abbreviations, phrase breaks from punctuation, function words (unaccented, reduced), wh-questions.
+- **Allophones:** flapped t/d ("water"), aspirated and unreleased stops, dark l, nasalized vowels next to nasals.
+- **Durations:** Klatt's (1979) rules, then a per-phone correction fitted to a real female speaker (CMU ARCTIC "slt", 300 sentences; stressed and unstressed vowels separately).
+- **Intonation:** a declining baseline, downstepped pitch accents on content words, a final fall, a rise for yes/no questions and a continuation rise at commas. The range is fitted to slt (7.5 semitones per sentence vs her 7.9).
+- **Vocal tract:** vowel targets from Hillenbrand et al. (1995): F1-F3 at 20% and 50% of each vowel, separately for the 48 women and 45 men. Consonant loci (Delattre et al. 1955) pull the vowel formants at each boundary.
+- **Consonant levels:** each phone's level relative to its neighbouring vowels matches slt within about 1 dB (`tools/arctic_calibrate.py`).
+
+Intelligibility, measured with speech recognition: Whisper small.en on 30 Harvard sentences (`tools/asr_eval.py`; a proxy for listeners, not a listening test).
+
+| Voice | Words recognized |
+|---|---|
+| Original SAM | 55% |
+| Sadie '82 | 51% |
+| Sadie (SAM front end, Klatt) | 50% |
+| **Engine A, female** | **76%** |
+| Engine A, male | 79% |
+
+### Neural voice source
+
+`-set neural=1` replaces the LF glottal pulse with a real woman's pulse shapes (0..1 blends the two).
+
+- **Data:** 136,000 glottal periods were recovered from slt's recordings by iterative adaptive inverse filtering (IAIF, Alku 1992; `tools/glottal_extract.py`).
+- **The model** (`tools/glottal_train.py` -> `src/glottal_model.h`): a 6 -> 16 -> 8 network (248 weights) predicts the log magnitudes of the pulse's first 24 harmonics as 8 principal components, from what the synthesizer knows when a period starts:
+  - F0
+  - loudness
+  - nasal or voiced-fricative context
+  - periods since voicing began
+  - the loudness trend
+- **Rebuilding the pulse:** each pulse is rebuilt with the voice's mean phase per harmonic. Predicting the waveform directly averages the varying opening peaks into a near-sine (H2 25 dB too weak); the harmonic model matches real pulses within 1-2 dB per harmonic.
+- **Results:** the long-term spectrum of engine A comes closer to slt's (4.6 dB RMS difference vs 5.1 with the LF pulse), and recognition is the same (76%). Whether it sounds better is for listeners to judge, so it is off by default. On the Pico it is integer-only, rebuilt every third period, and costs about 6% of a core.
+
+## Data
+
+The generators and calibration tools read these (not in the repository; `data/` is in `.gitignore`):
+
+```
+curl -L -o data/cmudict.dict https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict
+curl -L -o data/cmudict.LICENSE https://raw.githubusercontent.com/cmusphinx/cmudict/master/LICENSE
+# Hillenbrand et al. (1995) vowel data: vowdata.dat from https://homepages.wmich.edu/~hillenbr/voweldata.html -> data/
+# CMU ARCTIC slt (audio, labels): http://festvox.org/cmu_arctic/cmu_arctic/packed/cmu_us_slt_arctic-0.95-release.tar.bz2
+#   unpack wav/, lab/ and etc/ into data/arctic/cmu_us_slt_arctic/
+```
+
+The generated tables (`src/lexdata.h`, `src/rules_tables.h`, `src/glottal_model.h`) are in the repository, so building needs none of this.
+
 ## Commodore 64
 
 `c64/female_sam.prg` runs the female (and male) voice on a real C64 or in VICE, using SAM's own synthesis loop at the original speed and female data. See `c64/README.md`. On the PC the same voice is `sam.exe -voice female` (default SAM engine).
@@ -76,6 +126,9 @@ node web/test_wasm.js     # optional: checks wasm == native output
 - `python tools/vowel_space.py`: plots the F1/F2 vowel space of both voices against Hillenbrand's men/women means. Writes `out/vowel_space.png`.
 - `python tools/fricatives.py`: measures fricative centre of gravity, using Houle et al.'s method, and fricative-to-vowel levels for SAM, male and female.
 - `python tools/intonation.py [--range 1.2]`: F0 register and semitone range over sentences. Writes `out/intonation.png`.
+- Engine A: `tools/gen_lexicon.py` (CMUdict -> `src/lexdata.h`), `tools/test_lexicon.c` (checks it against every word), `tools/gen_rules_tables.py` (Hillenbrand -> `src/rules_tables.h`), `tools/arctic_calibrate.py` (levels and durations vs slt), `tools/rules_view.py` (spectrogram + F0 picture).
+- `python tools/asr_eval.py [--voices a,sadie,...] [--errors]`: intelligibility proxy, Whisper on the Harvard sentences.
+- Neural source: `tools/glottal_extract.py` (IAIF pulses from slt), `tools/glottal_train.py` (-> `src/glottal_model.h`), `tools/ltas_compare.py` (long-term spectrum vs slt).
 
 ## Status
 
@@ -115,5 +168,7 @@ node web/test_wasm.js     # optional: checks wasm == native output
 8. ✅ Commodore 64 port: SAM's renderer with female data, a cycle-exact 6502 output loop, and the rest in cc65 C and 6502 assembly. It is verified against the C reference in sim65, py65 and VICE (`c64/README.md`). The front end (reciter, parser, frame builder) is in assembly too, so speech starts ~0.16 s after Return, as in the original.
    - The WebAssembly build matches native output: correlation 1.000000, max difference 3·10⁻⁵ (16-bit rounding), for both engines, both voices, custom parameters and retro mode.
 9. ✅ Raspberry Pi Pico port (`pico/README.md`): fixed-point Klatt engine (log-spectral distance to the float engine 0.3–0.75 dB) and streaming output for both renderers (byte-identical to the buffered PC build). Sadie needs ~37% of one 133 MHz Cortex-M0+ core, Sadie '82 ~6%.
+10. ✅ Engine A (`-engine rules`): CMUdict pronunciations, Klatt durations and intonation calibrated on a real female speaker (CMU ARCTIC slt). Speech recognition gets 76% of words (female) vs 50-55% for the SAM-based voices. It runs on the PC, the web page (the default front end there) and the Pico (~42% of a core).
+11. ✅ Neural voice source (`-set neural=1`): a 248-weight network shaping each glottal period from a real woman's pulses; integer-only on the Pico (~+6% CPU). Off by default until judged by ear.
 
 `reference/SAM-original/` is the untouched upstream source, kept for diffs. Upstream SAM has no license file (it is a reverse-engineered port of the 1982 commercial program), so keep that in mind before redistributing.
