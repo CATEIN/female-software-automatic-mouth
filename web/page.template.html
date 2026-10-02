@@ -1,0 +1,767 @@
+<title>SAM Voice Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #edeff2;
+    --panel: #f8f9fb;
+    --ink: #171b22;
+    --muted: #5b6472;
+    --line: #d3d8df;
+    --track: #dce1e7;
+    --accent: #b45f06;
+    --accent-ink: #ffffff;
+    --accent-soft: #f6e6d3;
+    --error: #b42318;
+    --scope-bg: #0f1218;
+    --scope-ink: #c9d1dc;
+    --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --font-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121519;
+      --panel: #1a1e24;
+      --ink: #e7eaee;
+      --muted: #9aa3af;
+      --line: #2a3038;
+      --track: #2a3038;
+      --accent: #f2a541;
+      --accent-ink: #1a1206;
+      --accent-soft: #3a2a14;
+      --error: #f97066;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121519;
+    --panel: #1a1e24;
+    --ink: #e7eaee;
+    --muted: #9aa3af;
+    --line: #2a3038;
+    --track: #2a3038;
+    --accent: #f2a541;
+    --accent-ink: #1a1206;
+    --accent-soft: #3a2a14;
+    --error: #f97066;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 var(--font-ui);
+  }
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 20px 40px;
+    display: grid;
+    gap: 18px;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 24px;
+  }
+  h1 {
+    font: 600 30px/1.1 var(--font-display);
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; max-width: 62ch; }
+  .spec-line { font: 12px var(--font-data); color: var(--muted); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 920px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  label.cap, .cap {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 84px;
+    resize: vertical;
+    font: 16px/1.45 var(--font-ui);
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  textarea:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .row.between { justify-content: space-between; }
+
+  .seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .seg button {
+    font: 500 13px var(--font-ui);
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  .btn {
+    font: 600 14px var(--font-ui);
+    border-radius: 8px;
+    padding: 9px 18px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn.small { font-size: 12px; padding: 5px 10px; font-weight: 500; }
+
+  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font: 12px var(--font-ui);
+    color: var(--muted);
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .chip:hover { color: var(--ink); border-style: solid; }
+
+  .scope {
+    background: var(--scope-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+  .scope canvas { display: block; width: 100%; }
+  #spec { height: 220px; }
+  #wave { height: 56px; border-top: 1px solid #222a35; }
+  .scope .axis {
+    position: absolute;
+    left: 6px;
+    top: 0;
+    height: 220px;
+    pointer-events: none;
+    font: 10px var(--font-data);
+    color: var(--scope-ink);
+    opacity: 0.85;
+    text-shadow: 0 0 3px #000, 0 0 2px #000;
+  }
+  .scope .axis span { position: absolute; left: 0; transform: translateY(-50%); white-space: nowrap; }
+  #playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    left: 0;
+    pointer-events: none;
+  }
+
+  .status { font: 12px var(--font-data); color: var(--muted); min-height: 1.5em; }
+  .status.error { color: var(--error); }
+
+  .readout {
+    font: 13px/1.5 var(--font-data);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* parameter rack */
+  details.group { border-top: 1px solid var(--line); padding-top: 10px; }
+  details.group:first-of-type { border-top: 0; padding-top: 0; }
+  details.group > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  details.group > summary::-webkit-details-marker { display: none; }
+  details.group > summary::before { content: "▸"; color: var(--muted); margin-right: 6px; transition: transform 0.15s; display: inline-block; }
+  details.group[open] > summary::before { transform: rotate(90deg); }
+  details.group > summary .cap { flex: 1; }
+  .group-note { font-size: 12px; color: var(--muted); }
+  .params { display: grid; gap: 4px; margin-top: 8px; }
+
+  .param {
+    display: grid;
+    grid-template-columns: 9.5em minmax(0, 1fr) 5.8em 1.6em;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .param .name { font: 12.5px var(--font-data); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .param.changed .name { color: var(--accent); font-weight: 500; }
+  .param .help { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); margin-top: -4px; }
+  .param input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+    font: 12px var(--font-data);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 4px;
+    text-align: right;
+  }
+  .param .reset {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0;
+    visibility: hidden;
+  }
+  .param.changed .reset { visibility: visible; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .rack-disabled .params { opacity: 0.45; pointer-events: none; }
+
+  .cli { display: grid; gap: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    details.group > summary::before { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>SAM Voice Bench <span>/ female</span></h1>
+      <p class="sub">The 1982 Software Automatic Mouth with a rebuilt voice: an LF glottal source, a Klatt formant cascade and female vocal-tract data. This page runs the same C code as <code>sam.exe</code>, compiled to WebAssembly.</p>
+    </div>
+    <div class="spec-line">22,050 Hz · mono · Klatt cascade/parallel</div>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-label="Speak">
+      <div class="row between">
+        <div class="seg" role="group" aria-label="Voice">
+          <button type="button" id="v-female" data-voice="female" aria-pressed="true">Female</button>
+          <button type="button" id="v-male" data-voice="male" aria-pressed="false">Male</button>
+          <button type="button" id="v-samfemale" data-voice="samfemale" aria-pressed="false" title="SAM's own 1982 renderer with female data: the Commodore 64 voice">1982 female</button>
+          <button type="button" id="v-sam" data-voice="sam" aria-pressed="false">Original 1982</button>
+        </div>
+        <label class="check"><input type="checkbox" id="phonetic"> Phonetic input</label>
+      </div>
+
+      <textarea id="text" aria-label="Text to speak">Hello, how are you today? I hope you are feeling well.</textarea>
+
+      <div class="chips" aria-label="Example phrases">
+        <button type="button" class="chip" data-text="I am Sam, the software automatic mouth.">I am Sam…</button>
+        <button type="button" class="chip" data-text="Would you like to play a game of chess?">Question</button>
+        <button type="button" class="chip" data-text="Sister Sue sells sea shells. She thinks five fast thoughts.">Fricatives</button>
+        <button type="button" class="chip" data-text="My mother made melon jam, and nobody knew.">Nasals</button>
+        <button type="button" class="chip" data-text="/HEH3LOW2, MAY NEYM IHZ SAE4M." data-phonetic="1">Phonetic</button>
+      </div>
+
+      <div class="row">
+        <button type="button" class="btn primary" id="speak">Speak</button>
+        <button type="button" class="btn" id="replay" disabled>Play again</button>
+        <label class="check"><input type="checkbox" id="auto" checked> Speak after each change</label>
+      </div>
+
+      <div class="scope">
+        <canvas id="spec" width="1200" height="220" aria-label="Spectrogram of the last utterance"></canvas>
+        <canvas id="wave" width="1200" height="56" aria-label="Waveform of the last utterance"></canvas>
+        <div class="axis" aria-hidden="true">
+          <span style="top: 9.3%">10 kHz</span>
+          <span style="top: 32%">7.5</span>
+          <span style="top: 54.6%">5</span>
+          <span style="top: 77.3%">2.5</span>
+        </div>
+        <div id="playhead" hidden></div>
+      </div>
+      <div class="status" id="status" role="status">Loading the synthesizer…</div>
+
+      <div>
+        <div class="cap">Phonemes (SAM notation)</div>
+        <div class="readout" id="phonemes">—</div>
+      </div>
+
+      <div class="cli">
+        <div class="row between">
+          <span class="cap">Same sound from the command line</span>
+          <button type="button" class="btn small" id="copy-cli">Copy</button>
+        </div>
+        <div class="readout" id="cli">—</div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Voice parameters" id="rack">
+      <div class="row between">
+        <span class="cap" id="rack-title">Female voice parameters</span>
+        <button type="button" class="btn small" id="reset-all">Reset to preset</button>
+      </div>
+      <details class="group" open id="g-sam">
+        <summary><span class="cap">SAM front end</span><span class="group-note">all voices</span></summary>
+        <div class="params" id="sam-params"></div>
+      </details>
+      <div id="klatt-groups"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+/*SAM_LOADER*/
+</script>
+<script>
+(function () {
+  "use strict";
+  const WASM_BASE64 = "__SAM_WASM_BASE64__";
+  const STORE_KEY = "sam-voice-bench-v2";
+
+  const SAM_CONTROLS = [
+    { name: "speed", min: 20, max: 200, step: 1, def: 72, help: "Speaking rate: higher is slower (frame length)" },
+    { name: "pitch", min: 20, max: 150, step: 1, def: 64, help: "SAM pitch: lower number = higher voice" },
+    { name: "mouth", min: 50, max: 250, step: 1, def: 128, help: "SAM mouth (scales F1 of vowels)" },
+    { name: "throat", min: 50, max: 250, step: 1, def: 128, help: "SAM throat (scales F2 of vowels)" },
+  ];
+  const RETRO_DEFAULTS = { bits: 0, hold: 1 };
+  const OPEN_GROUPS = { "Source": true, "Vocal tract": true, "Noise": false, "Retro": true };
+  const GROUP_NOTES = {
+    "Source": "glottal pulse + pitch",
+    "Vocal tract": "formants",
+    "Noise": "fricatives, /h/",
+    "Retro": "step 6 output stage",
+  };
+
+  const $ = (id) => document.getElementById(id);
+  // "sam" and "samfemale" use SAM's own 1982 renderer (no Klatt parameters)
+  const is1982 = (v) => v === "sam" || v === "samfemale";
+  const engineFor = (v) => (is1982(v) ? v : "klatt");
+  const statusEl = $("status");
+
+  let sam = null;
+  let voice = "female";
+  let presets = {};          // voice -> preset values
+  let values = {};           // voice -> current values
+  let samValues = { speed: 72, pitch: 64, mouth: 128, throat: 128, sing: false };
+  let lastAudio = null;
+  let audioCtx = null;
+  let playing = null;
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle("error", !!isError);
+  }
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function save() {
+    try {
+      // only what differs from the presets, so preset updates still arrive
+      const changes = {};
+      for (const v of Object.keys(values)) {
+        changes[v] = {};
+        for (const [k, val] of Object.entries(values[v]))
+          if (Math.abs(val - presets[v][k]) > 1e-9) changes[v][k] = val;
+      }
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        voice, values: changes, samValues, text: $("text").value,
+        phonetic: $("phonetic").checked, auto: $("auto").checked,
+      }));
+    } catch (e) { /* storage unavailable: settings simply are not remembered */ }
+  }
+
+  function fmt(v, p) {
+    const span = p.max - p.min;
+    const digits = span <= 0.2 ? 4 : span <= 3 ? 3 : span <= 20 ? 2 : 0;
+    return Number(v).toFixed(digits);
+  }
+  function stepFor(p) {
+    const span = p.max - p.min;
+    return span <= 0.2 ? 0.0005 : span <= 3 ? 0.005 : span <= 20 ? 0.05 : 1;
+  }
+
+  // ---------- parameter rack ----------
+  function paramRow(p, value, preset, onInput, onReset) {
+    const row = document.createElement("div");
+    row.className = "param";
+    const id = "p-" + p.name;
+    row.innerHTML =
+      `<label class="name" for="${id}" title="${p.help}">${p.name}</label>` +
+      `<input type="range" id="${id}" min="${p.min}" max="${p.max}" step="${p.step || stepFor(p)}">` +
+      `<input type="number" id="${id}-n" min="${p.min}" max="${p.max}" step="${p.step || stepFor(p)}" aria-label="${p.name} value">` +
+      `<button type="button" class="reset" title="Reset ${p.name} to the preset value" aria-label="Reset ${p.name}">↺</button>` +
+      `<div class="help">${p.help}</div>`;
+    const range = row.querySelector('input[type="range"]');
+    const num = row.querySelector('input[type="number"]');
+    const set = (v, commit) => {
+      v = Math.min(p.max, Math.max(p.min, Number(v)));
+      if (!Number.isFinite(v)) return;
+      range.value = v;
+      num.value = fmt(v, p);
+      row.classList.toggle("changed", Math.abs(v - preset) > 1e-9);
+      onInput(v, commit);
+    };
+    range.addEventListener("input", () => set(range.value, false));
+    range.addEventListener("change", () => set(range.value, true));
+    num.addEventListener("change", () => set(num.value, true));
+    row.querySelector(".reset").addEventListener("click", () => { set(preset, true); onReset && onReset(); });
+    range.value = value;
+    num.value = fmt(value, p);
+    row.classList.toggle("changed", Math.abs(value - preset) > 1e-9);
+    return row;
+  }
+
+  function buildSamControls() {
+    const box = $("sam-params");
+    box.innerHTML = "";
+    for (const c of SAM_CONTROLS) {
+      box.appendChild(paramRow(c, samValues[c.name], c.def, (v, commit) => {
+        samValues[c.name] = v;
+        changed(commit);
+      }));
+    }
+    const sing = document.createElement("label");
+    sing.className = "check";
+    sing.innerHTML = '<input type="checkbox" id="sing"> Sing mode (no pitch contour; use with a low pitch number)';
+    sing.querySelector("input").checked = !!samValues.sing;
+    sing.querySelector("input").addEventListener("change", (ev) => { samValues.sing = ev.target.checked; changed(true); });
+    box.appendChild(sing);
+  }
+
+  function buildRack() {
+    const host = $("klatt-groups");
+    host.innerHTML = "";
+    const groups = {};
+    for (const p of sam.params) (groups[p.group] = groups[p.group] || []).push(p);
+    const v = is1982(voice) ? "female" : voice;
+    for (const [name, list] of Object.entries(groups)) {
+      const det = document.createElement("details");
+      det.className = "group";
+      det.open = !!OPEN_GROUPS[name];
+      det.innerHTML = `<summary><span class="cap">${name}</span><span class="group-note">${GROUP_NOTES[name] || ""}</span></summary><div class="params"></div>`;
+      const box = det.querySelector(".params");
+      for (const p of list) {
+        box.appendChild(paramRow(p, values[v][p.name], presets[v][p.name], (val, commit) => {
+          values[v][p.name] = val;
+          changed(commit);
+        }));
+      }
+      host.appendChild(det);
+    }
+    $("rack").classList.toggle("rack-disabled", is1982(voice));
+    $("rack-title").textContent = is1982(voice)
+      ? "Klatt parameters (not used by the 1982 renderer)"
+      : (voice === "female" ? "Female" : "Male") + " voice parameters";
+  }
+
+  function selectVoice(v) {
+    voice = v;
+    for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(b.dataset.voice === v));
+    buildRack();
+    updateCli();
+    save();
+  }
+
+  // ---------- speaking ----------
+  let pending = null;
+  function changed(commit) {
+    updateCli();
+    save();
+    if (commit && $("auto").checked && lastAudio) {
+      clearTimeout(pending);
+      pending = setTimeout(speak, 60);
+    }
+  }
+
+  function applySettings() {
+    sam.setSam(samValues);
+    if (!is1982(voice)) {
+      sam.setVoice(voice);
+      for (const [k, v] of Object.entries(values[voice])) sam.setParam(k, v);
+    }
+  }
+
+  function speak() {
+    if (!sam) return;
+    const text = $("text").value.trim();
+    if (!text) { setStatus("Type something to speak.", true); return; }
+    try {
+      applySettings();
+      const t0 = performance.now();
+      const r = sam.speak(text, { engine: engineFor(voice), phonetic: $("phonetic").checked });
+      const ms = performance.now() - t0;
+      lastAudio = r;
+      play();                   // sound first; the spectrogram follows
+      $("phonemes").textContent = r.phonemes.trim() || "—";
+      $("replay").disabled = false;
+      setStatus(`${(r.samples.length / r.sampleRate).toFixed(2)} s of audio · synthesized in ${ms < 1 ? "<1" : ms.toFixed(0)} ms`);
+      requestAnimationFrame(() => drawScope(r.samples, r.sampleRate));
+    } catch (err) {
+      setStatus(err.message + ($("phonetic").checked ? " Check the phoneme spelling (see the list in sam.exe's help)." : ""), true);
+    }
+  }
+
+  function play() {
+    if (!lastAudio) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (playing) { try { playing.stop(); } catch (e) {} }
+      const buf = audioCtx.createBuffer(1, lastAudio.samples.length, lastAudio.sampleRate);
+      buf.copyToChannel(lastAudio.samples, 0);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      const start = audioCtx.currentTime + 0.02;
+      src.start(start);
+      playing = src;
+      animatePlayhead(start, buf.duration, src);
+    } catch (err) {
+      setStatus("Audio playback is unavailable here: " + err.message, true);
+    }
+  }
+
+  function animatePlayhead(start, duration, src) {
+    const head = $("playhead");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { head.hidden = true; return; }
+    head.hidden = false;
+    const tick = () => {
+      if (playing !== src) return;
+      const t = (audioCtx.currentTime - start) / duration;
+      if (t >= 1) { head.hidden = true; return; }
+      head.style.left = Math.max(0, t) * 100 + "%";
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- spectrogram ----------
+  const LUT = (() => {
+    const stops = [[0, [15, 18, 24]], [0.35, [58, 36, 110]], [0.6, [176, 62, 92]], [0.8, [242, 165, 65]], [1, [252, 244, 200]]];
+    const lut = new Uint8ClampedArray(256 * 3);
+    for (let i = 0; i < 256; i++) {
+      const t = i / 255;
+      let k = 0;
+      while (k < stops.length - 2 && t > stops[k + 1][0]) k++;
+      const [t0, c0] = stops[k], [t1, c1] = stops[k + 1];
+      const u = (t - t0) / (t1 - t0);
+      for (let j = 0; j < 3; j++) lut[i * 3 + j] = c0[j] + (c1[j] - c0[j]) * u;
+    }
+    return lut;
+  })();
+
+  function fft(re, im) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const a = i + k, b = a + len / 2;
+          const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - tr; im[b] = im[a] - ti;
+          re[a] += tr; im[a] += ti;
+          const nr = cr * wr - ci * wi;
+          ci = cr * wi + ci * wr; cr = nr;
+        }
+      }
+    }
+  }
+
+  function drawScope(x, sr) {
+    const spec = $("spec"), wave = $("wave");
+    const W = spec.width, H = spec.height;
+    const N = 512, bins = N / 2;
+    const hop = Math.max(1, Math.floor(x.length / W));
+    const frames = Math.min(W, Math.floor((x.length - N) / hop) + 1);
+    const win = new Float32Array(N).map((_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)));
+    const img = spec.getContext("2d").createImageData(W, H);
+    const re = new Float32Array(N), im = new Float32Array(N);
+    const db = new Float32Array(W * bins);
+    let top = -200;
+    for (let f = 0; f < W; f++) {
+      const fi = Math.floor(f * Math.max(frames, 1) / W);
+      const off = fi * hop;
+      for (let i = 0; i < N; i++) { re[i] = (x[off + i] || 0) * win[i]; im[i] = 0; }
+      fft(re, im);
+      for (let b = 0; b < bins; b++) {
+        const v = 10 * Math.log10(re[b] * re[b] + im[b] * im[b] + 1e-12);
+        db[f * bins + b] = v;
+        if (v > top) top = v;
+      }
+    }
+    // 75 dB of range below the loudest point
+    for (let f = 0; f < W; f++) {
+      const col = db.subarray(f * bins, (f + 1) * bins);
+      for (let y = 0; y < H; y++) {
+        const b = Math.floor((H - 1 - y) / (H - 1) * (bins - 1));
+        const t = Math.min(1, Math.max(0, (col[b] - top + 75) / 75));
+        const li = Math.round(t * 255) * 3, p = (y * W + f) * 4;
+        img.data[p] = LUT[li]; img.data[p + 1] = LUT[li + 1]; img.data[p + 2] = LUT[li + 2]; img.data[p + 3] = 255;
+      }
+    }
+    spec.getContext("2d").putImageData(img, 0, 0);
+
+    const g = wave.getContext("2d"), WH = wave.height;
+    g.fillStyle = "#0f1218";
+    g.fillRect(0, 0, W, WH);
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#f2a541";
+    const per = x.length / W;
+    for (let i = 0; i < W; i++) {
+      let lo = 0, hi = 0;
+      for (let k = Math.floor(i * per); k < Math.floor((i + 1) * per); k++) { lo = Math.min(lo, x[k]); hi = Math.max(hi, x[k]); }
+      g.fillRect(i, (1 - hi) * WH / 2, 1, Math.max(1, (hi - lo) * WH / 2));
+    }
+  }
+
+  // ---------- command line ----------
+  function cliText() {
+    const parts = ["sam.exe"];
+    if (voice === "samfemale") parts.push("-voice female");
+    else if (voice !== "sam") parts.push("-engine klatt", "-voice " + voice);
+    for (const c of SAM_CONTROLS) if (samValues[c.name] !== c.def) parts.push(`-${c.name} ${samValues[c.name]}`);
+    if (samValues.sing) parts.push("-sing");
+    if (!is1982(voice)) {
+      for (const p of sam.params) {
+        const v = values[voice][p.name];
+        if (Math.abs(v - presets[voice][p.name]) > 1e-9) parts.push(`-set ${p.name}=${+fmt(v, p)}`);
+      }
+    }
+    if ($("phonetic").checked) parts.push("-phonetic");
+    parts.push("-wav out.wav");
+    parts.push('"' + $("text").value.trim().replace(/"/g, "'") + '"');
+    return parts.join(" ");
+  }
+  function updateCli() { if (sam) $("cli").textContent = cliText(); }
+
+  // ---------- wiring ----------
+  function wire() {
+    for (const b of document.querySelectorAll(".seg button")) b.addEventListener("click", () => { selectVoice(b.dataset.voice); if (lastAudio) speak(); });
+    $("speak").addEventListener("click", speak);
+    $("replay").addEventListener("click", play);
+    $("text").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); speak(); } });
+    $("text").addEventListener("input", () => { updateCli(); save(); });
+    $("phonetic").addEventListener("change", () => { updateCli(); save(); });
+    $("auto").addEventListener("change", save);
+    for (const chip of document.querySelectorAll(".chip")) {
+      chip.addEventListener("click", () => {
+        $("text").value = chip.dataset.text;
+        $("phonetic").checked = !!chip.dataset.phonetic;
+        updateCli(); save(); speak();
+      });
+    }
+    $("reset-all").addEventListener("click", () => {
+      if (!is1982(voice)) values[voice] = { ...presets[voice] };
+      for (const c of SAM_CONTROLS) samValues[c.name] = c.def;
+      samValues.sing = false;
+      buildSamControls(); buildRack(); updateCli(); save();
+      if (lastAudio) speak();
+    });
+    $("copy-cli").addEventListener("click", async () => {
+      const text = cliText();
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("Command copied. Run it in PowerShell in the project folder.");
+      } catch (e) {
+        const range = document.createRange();
+        range.selectNodeContents($("cli"));
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+        setStatus("Copy is blocked here; the command is selected, press Ctrl+C.");
+      }
+    });
+  }
+
+  async function init() {
+    wire();
+    const saved = load();
+    try {
+      const bytes = Uint8Array.from(atob(WASM_BASE64), (c) => c.charCodeAt(0));
+      sam = await createSam(bytes, (m) => console.log("[sam]", m));
+    } catch (err) {
+      setStatus("The synthesizer could not start in this browser (" + err.message + "). Open web/female_sam.html from the project folder instead.", true);
+      $("speak").disabled = true;
+      return;
+    }
+    for (const v of ["female", "male"]) {
+      sam.setVoice(v);
+      presets[v] = { ...sam.getParams(), ...RETRO_DEFAULTS };
+      values[v] = { ...presets[v], ...((saved.values || {})[v] || {}) };
+    }
+    if (saved.samValues) samValues = { ...samValues, ...saved.samValues };
+    if (typeof saved.text === "string" && saved.text.trim()) $("text").value = saved.text;
+    $("phonetic").checked = !!saved.phonetic;
+    if (typeof saved.auto === "boolean") $("auto").checked = saved.auto;
+    buildSamControls();
+    selectVoice(["female", "male", "samfemale", "sam"].includes(saved.voice) ? saved.voice : "female");
+    // render once so the page opens with a spectrogram; audio waits for a click
+    try {
+      applySettings();
+      const r = sam.speak($("text").value, { engine: engineFor(voice), phonetic: $("phonetic").checked });
+      lastAudio = r;
+      $("phonemes").textContent = r.phonemes.trim() || "—";
+      drawScope(r.samples, r.sampleRate);
+      $("replay").disabled = false;
+      setStatus("Ready. Press Speak (or Ctrl+Enter) to hear it; sliders re-speak when released.");
+    } catch (err) {
+      setStatus("Ready. " + err.message, true);
+    }
+  }
+
+  init();
+})();
+</script>

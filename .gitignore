@@ -1,0 +1,22 @@
+# build outputs
+build/
+out/
+*.exe
+*.obj
+*.o
+*.pdb
+__pycache__/
+
+# Commodore 64 intermediates (c64/female_sam.prg itself is kept)
+c64/build/
+c64/test/*.bin
+c64/test/*.lbl
+c64/test/*.lst
+
+# Raspberry Pi Pico
+pico/build/
+pico/bench/bench.elf
+pico/bench/bench.sym
+
+# copy of web/female_sam.html published as a claude.ai artifact
+web/artifact.html

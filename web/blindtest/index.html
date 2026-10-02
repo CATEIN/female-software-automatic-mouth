@@ -1,0 +1,453 @@
+<title>Which Voice Is She?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112,600;112,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F1F3EF;
+    --surface: #FAFBF8;
+    --ink: #1C211E;
+    --muted: #5D665F;
+    --line: #CDD3CC;
+    --accent: #1D6F62;
+    --accent-ink: #FFFFFF;
+    --soft: #DCEBE6;
+    --wave: #8FA39A;
+    --wave-done: #1D6F62;
+    --display: "Archivo", "Arial Narrow", Arial, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111513; --surface: #181D1A; --ink: #E3E8E4; --muted: #9AA59D; --line: #2E3631;
+      --accent: #4CC2A9; --accent-ink: #0B1210; --soft: #1D332D; --wave: #4E5C55; --wave-done: #4CC2A9;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111513; --surface: #181D1A; --ink: #E3E8E4; --muted: #9AA59D; --line: #2E3631;
+    --accent: #4CC2A9; --accent-ink: #0B1210; --soft: #1D332D; --wave: #4E5C55; --wave-done: #4CC2A9;
+    color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--ink); font: 17px/1.55 var(--body); }
+  .wrap { max-width: 680px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 28px; }
+  h1, h2 { font-family: var(--display); font-stretch: 112%; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(2.1rem, 6vw, 3rem); font-weight: 800; line-height: 1.05; }
+  h2 { font-size: 1.35rem; font-weight: 600; }
+  p { margin: 0; max-width: 62ch; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .lede { font-size: 1.1rem; }
+  .muted { color: var(--muted); }
+  .stack { display: grid; gap: 14px; }
+  .specs { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 13px/1.4 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .specs span::before { content: "· "; color: var(--line); }
+  .specs span:first-child::before { content: ""; }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .primary {
+    justify-self: start; border: 0; border-radius: 999px; padding: 13px 26px;
+    background: var(--accent); color: var(--accent-ink); font: 700 1rem/1 var(--body);
+  }
+  .primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* progress: one tick per pair */
+  .progress { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .progress i { height: 5px; border-radius: 3px; background: var(--line); }
+  .progress i.done { background: var(--accent); }
+  .progress i.now { background: var(--wave); }
+  .trialhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .counter { font: 500 14px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+  .sentence { font-size: 1.25rem; font-style: italic; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 520px) { .pair { grid-template-columns: 1fr; } }
+  .voice {
+    display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    text-align: left;
+  }
+  .voice:hover { border-color: var(--wave); }
+  .voice.playing { border-color: var(--accent); }
+  .letter {
+    width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+    font: 800 1.5rem/1 var(--display); font-stretch: 112%; background: var(--soft); color: var(--ink);
+  }
+  .voice.playing .letter { background: var(--accent); color: var(--accent-ink); }
+  .voice .meta { display: grid; gap: 6px; min-width: 0; }
+  .voice .label { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+  .voice .label small { font: 12px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  .voice canvas { width: 100%; height: 34px; display: block; }
+
+  .question { display: grid; gap: 10px; }
+  .question legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .choice {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 14px;
+    font-weight: 700; text-align: center;
+  }
+  .choice[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .choice:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint { font-size: 0.92rem; color: var(--muted); min-height: 1.4em; }
+
+  /* results */
+  .score { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .figure { border-top: 2px solid var(--ink); padding-top: 12px; display: grid; gap: 4px; }
+  .figure b { font: 800 2.6rem/1 var(--display); font-stretch: 112%; font-variant-numeric: tabular-nums; }
+  .figure b small { font-size: 1.1rem; color: var(--muted); font-weight: 600; }
+  .key { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .key p { font-size: 0.95rem; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th { text-align: left; font: 500 11px/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  td.n { font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pick { font: 500 12px/1 var(--mono); padding: 4px 8px; border-radius: 999px; background: var(--line); white-space: nowrap; }
+  .pick.s82 { background: var(--soft); color: var(--accent); }
+  .mini { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 0.85rem; white-space: nowrap; }
+  .bars { display: grid; gap: 12px; }
+  .bar { display: grid; gap: 6px; }
+  .bar .row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.95rem; }
+  .bar .row span:last-child { font: 14px var(--mono); font-variant-numeric: tabular-nums; }
+  .track { height: 12px; border-radius: 6px; background: var(--line); position: relative; overflow: hidden; }
+  .track .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 6px; }
+  .track .mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: 0.5; }
+  .note { font-size: 0.9rem; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) {
+    .track .fill { transition: width 600ms ease; }
+  }
+</style>
+
+<main class="wrap" id="app">
+  <!-- intro -->
+  <section class="stack" id="intro">
+    <span class="eyebrow">Blind listening test · 10 pairs · about 3 minutes</span>
+    <h1>Which voice is she?</h1>
+    <p class="lede">You will hear ten short sentences, each spoken by two computer voices, A and B. Both come from the same 1982 speech synthesizer and speak at the same average pitch. Which one sounds more like a woman?</p>
+    <p>For each pair, play both voices (as often as you like), then answer two questions: which sounds more like a woman, and which is clearer. The order is shuffled for every listener. Your score and what everyone else chose appear at the end.</p>
+    <div class="specs"><span>Headphones help</span><span>22 050 Hz mono</span><span>loudness matched</span><span>no right answers</span></div>
+    <button class="primary" id="start" type="button">Start listening</button>
+    <p class="hint" id="loadmsg"></p>
+  </section>
+
+  <!-- trial -->
+  <section class="stack" id="trial" hidden>
+    <div class="trialhead">
+      <span class="counter" id="counter">Pair 01 / 10</span>
+      <span class="counter">Play both, then answer</span>
+    </div>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+    <p class="sentence" id="sentence"></p>
+    <div class="pair">
+      <button class="voice" id="playA" type="button" aria-label="Play voice A">
+        <span class="letter">A</span>
+        <span class="meta"><span class="label">Voice A <small id="durA"></small></span><canvas id="waveA" width="400" height="68"></canvas></span>
+      </button>
+      <button class="voice" id="playB" type="button" aria-label="Play voice B">
+        <span class="letter">B</span>
+        <span class="meta"><span class="label">Voice B <small id="durB"></small></span><canvas id="waveB" width="400" height="68"></canvas></span>
+      </button>
+    </div>
+    <fieldset class="question">
+      <legend>Which sounds more like a woman?</legend>
+      <div class="choices">
+        <button class="choice" type="button" id="femA" data-q="female" data-v="A" aria-pressed="false">A</button>
+        <button class="choice" type="button" id="femB" data-q="female" data-v="B" aria-pressed="false">B</button>
+      </div>
+    </fieldset>
+    <fieldset class="question">
+      <legend>Which is clearer, easier to understand?</legend>
+      <div class="choices">
+        <button class="choice" type="button" id="clrA" data-q="clear" data-v="A" aria-pressed="false">A</button>
+        <button class="choice" type="button" id="clrB" data-q="clear" data-v="B" aria-pressed="false">B</button>
+      </div>
+    </fieldset>
+    <p class="hint" id="hint">Play voice A and voice B to unlock the answers.</p>
+    <button class="primary" id="next" type="button" disabled>Next pair</button>
+  </section>
+
+  <!-- results -->
+  <section class="stack" id="results" hidden>
+    <span class="eyebrow">Your results</span>
+    <h1 id="verdict">Here is what you heard</h1>
+    <div class="key">
+      <h2>What the two voices were</h2>
+      <p><b>Sadie '82</b> is SAM's original 1982 renderer driven by new female data: formant frequencies scaled per vowel from measurements of women's voices (Hillenbrand et al. 1995) and a female pitch register.</p>
+      <p><b>Pitched-up SAM</b> is the original 1982 voice with only its pitch raised to the same average, the usual way of getting a "female" SAM.</p>
+    </div>
+    <div class="score">
+      <div class="figure"><span class="eyebrow">More like a woman</span><b id="scoreFem">0<small> / 10</small></b><span class="muted">pairs where you picked Sadie '82</span></div>
+      <div class="figure"><span class="eyebrow">Clearer</span><b id="scoreClr">0<small> / 10</small></b><span class="muted">pairs where you picked Sadie '82</span></div>
+    </div>
+
+    <h2>Everyone so far</h2>
+    <div class="bars" id="pooled">
+      <p class="note" id="pooledNote">Loading the shared tally…</p>
+    </div>
+
+    <h2>Pair by pair</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Sentence</th><th>Sadie '82 was</th><th>Woman</th><th>Clearer</th><th>Listen</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note">Both voices in each pair were trimmed of silence and matched in loudness. The pitched-up SAM is set to the same average F0 (within 2%); raising SAM's pitch setting also widens its intonation swings, which is part of how it normally sounds.</p>
+    <button class="primary" id="again" type="button">Take it again</button>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const PAIRS = 10;
+  let clips = null;          // from clips.json
+  let ctx = null;            // AudioContext, created on the first click
+  const buffers = {};        // url -> AudioBuffer
+  let order = [];            // trials: {clip, sadieIs: "A"|"B", female, clear, playedA, playedB}
+  let current = 0;
+  let source = null, playingBtn = null, raf = 0;
+
+  // ---------- audio ----------
+  async function loadClips() {
+    if (clips) return;
+    const r = await fetch("clips.json");
+    if (!r.ok) throw new Error("clips.json " + r.status);
+    clips = await r.json();
+  }
+  async function getBuffer(url) {
+    if (buffers[url]) return buffers[url];
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(url + " " + r.status);
+    const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+    buffers[url] = buf;
+    return buf;
+  }
+  function stop() {
+    if (source) { try { source.onended = null; source.stop(); } catch (e) {} source = null; }
+    if (playingBtn) playingBtn.classList.remove("playing");
+    playingBtn = null;
+    cancelAnimationFrame(raf);
+  }
+  function play(buf, btn, canvas) {
+    stop();
+    source = ctx.createBufferSource();
+    source.buffer = buf;
+    source.connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    source.start();
+    playingBtn = btn;
+    btn.classList.add("playing");
+    const tick = () => {
+      drawWave(canvas, buf, Math.min(1, (ctx.currentTime - t0) / buf.duration));
+      if (source) raf = requestAnimationFrame(tick);
+    };
+    tick();
+    source.onended = () => { drawWave(canvas, buf, 0); stop(); };
+  }
+
+  // waveform: peak envelope of the clip, the played part in the accent color
+  function drawWave(canvas, buf, progress) {
+    const g = canvas.getContext("2d");
+    const css = getComputedStyle(document.documentElement);
+    const w = canvas.width, h = canvas.height, data = buf.getChannelData(0);
+    const cols = 100, step = Math.floor(data.length / cols), bw = w / cols;
+    g.clearRect(0, 0, w, h);
+    for (let c = 0; c < cols; c++) {
+      let peak = 0;
+      for (let i = c * step; i < (c + 1) * step; i += 4) peak = Math.max(peak, Math.abs(data[i]));
+      const bh = Math.max(2, Math.min(1, peak * 2.2) * h);
+      g.fillStyle = (c + 0.5) / cols <= progress ? css.getPropertyValue("--wave-done") : css.getPropertyValue("--wave");
+      g.fillRect(c * bw + 1, (h - bh) / 2, Math.max(1, bw - 2), bh);
+    }
+  }
+
+  // ---------- test flow ----------
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  function newOrder() {
+    order = shuffle(clips.map((_, i) => i)).slice(0, PAIRS).map((clip) => ({
+      clip, sadieIs: Math.random() < 0.5 ? "A" : "B", female: null, clear: null, playedA: false, playedB: false,
+    }));
+    current = 0;
+  }
+  function urlFor(t, letter) {
+    const c = clips[t.clip];
+    return letter === t.sadieIs ? c.sadie82 : c.sam;
+  }
+
+  async function showTrial() {
+    stop();
+    const t = order[current];
+    $("counter").textContent = `Pair ${String(current + 1).padStart(2, "0")} / ${PAIRS}`;
+    $("progress").innerHTML = order.map((_, i) => `<i class="${i < current ? "done" : i === current ? "now" : ""}"></i>`).join("");
+    $("sentence").textContent = `“${clips[t.clip].text}”`;
+    for (const L of ["A", "B"]) {
+      const buf = await getBuffer(urlFor(t, L));
+      $("dur" + L).textContent = buf.duration.toFixed(1) + " s";
+      drawWave($("wave" + L), buf, 0);
+    }
+    refreshAnswers();
+    // fetch the next pair in the background
+    const n = order[current + 1];
+    if (n) { getBuffer(urlFor(n, "A")).catch(() => {}); getBuffer(urlFor(n, "B")).catch(() => {}); }
+  }
+
+  function refreshAnswers() {
+    const t = order[current];
+    const unlocked = t.playedA && t.playedB;
+    document.querySelectorAll(".choice").forEach((b) => {
+      b.disabled = !unlocked;
+      b.setAttribute("aria-pressed", String(t[b.dataset.q] === b.dataset.v));
+    });
+    $("next").disabled = !(t.female && t.clear);
+    $("next").textContent = current === PAIRS - 1 ? "See my results" : "Next pair";
+    $("hint").textContent = !unlocked
+      ? `Play ${!t.playedA && !t.playedB ? "voice A and voice B" : t.playedA ? "voice B" : "voice A"} to unlock the answers.`
+      : !(t.female && t.clear) ? "Answer both questions. You can replay either voice." : "";
+  }
+
+  async function onPlay(L) {
+    const t = order[current];
+    const buf = await getBuffer(urlFor(t, L));
+    play(buf, $("play" + L), $("wave" + L));
+    t["played" + L] = true;
+    refreshAnswers();
+  }
+
+  // ---------- results ----------
+  function tally(trials) {
+    return {
+      female: trials.filter((t) => t.female === t.sadieIs).length,
+      clear: trials.filter((t) => t.clear === t.sadieIs).length,
+    };
+  }
+
+  function showResults() {
+    stop();
+    const s = tally(order);
+    $("scoreFem").innerHTML = `${s.female}<small> / ${PAIRS}</small>`;
+    $("scoreClr").innerHTML = `${s.clear}<small> / ${PAIRS}</small>`;
+    $("verdict").textContent =
+      s.female >= 7 ? "You heard Sadie '82 as the woman" :
+      s.female <= 3 ? "You heard pitched-up SAM as the woman" :
+      "You split your votes between the two";
+    $("rows").innerHTML = "";
+    order.forEach((t, i) => {
+      const tr = document.createElement("tr");
+      const pick = (v) => v === t.sadieIs ? `<span class="pick s82">Sadie '82</span>` : `<span class="pick">SAM</span>`;
+      tr.innerHTML = `<td class="n">${String(i + 1).padStart(2, "0")}</td><td></td><td class="n">${t.sadieIs}</td>
+        <td>${pick(t.female)}</td><td>${pick(t.clear)}</td>
+        <td><button class="mini" type="button" data-u="${clips[t.clip].sadie82}">Sadie '82</button>
+            <button class="mini" type="button" data-u="${clips[t.clip].sam}">SAM</button></td>`;
+      tr.children[1].textContent = clips[t.clip].text;
+      $("rows").appendChild(tr);
+    });
+    $("intro").hidden = true; $("trial").hidden = true; $("results").hidden = false;
+    window.scrollTo(0, 0);
+    saveAndShowPooled(s);
+  }
+
+  $("rows").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-u]");
+    if (!b) return;
+    stop();
+    source = ctx.createBufferSource();
+    source.buffer = await getBuffer(b.dataset.u);
+    source.connect(ctx.destination);
+    source.start();
+  });
+
+  // ---------- shared tally (needs a signed-in viewer who may write) ----------
+  let db = null, me = null, unsub = null;
+  const ready = (async () => {
+    try {
+      if (!window.claude?.use) return;
+      db = await window.claude.use("db");
+      const user = await window.claude.use("user");
+      me = user ? await user.id() : null;
+    } catch (e) { db = null; }
+  })();
+
+  function renderPooled(docs, note) {
+    const rows = docs.map((d) => d.data()).filter((r) => r && Number.isFinite(r.female) && Number.isFinite(r.pairs));
+    const box = $("pooled");
+    if (!rows.length) { box.innerHTML = `<p class="note">${note || "No saved results yet."}</p>`; return; }
+    const pairs = rows.reduce((a, r) => a + r.pairs, 0);
+    const fem = rows.reduce((a, r) => a + r.female, 0);
+    const clr = rows.reduce((a, r) => a + (Number.isFinite(r.clear) ? r.clear : 0), 0);
+    const mostly = rows.filter((r) => r.female > r.pairs / 2).length;
+    const pct = (x) => Math.round(100 * x / pairs);
+    box.innerHTML = `
+      <div class="bar"><div class="row"><span>Sadie '82 chosen as more like a woman</span><span>${pct(fem)}%</span></div>
+        <div class="track"><div class="fill" style="width:${pct(fem)}%"></div><div class="mid"></div></div></div>
+      <div class="bar"><div class="row"><span>Sadie '82 chosen as clearer</span><span>${pct(clr)}%</span></div>
+        <div class="track"><div class="fill" style="width:${pct(clr)}%"></div><div class="mid"></div></div></div>
+      <p class="note">${rows.length} ${rows.length === 1 ? "listener" : "listeners"}, ${pairs} pairs. ${mostly} of ${rows.length} picked Sadie '82 as the woman in most of their pairs. The line marks 50%, where nobody could tell them apart.${note ? " " + note : ""}</p>`;
+  }
+
+  async function saveAndShowPooled(s) {
+    await ready;
+    if (!db) {
+      $("pooled").innerHTML = `<p class="note">The shared tally isn't available here (it needs you to be signed in to Claude). Your own score is above.</p>`;
+      return;
+    }
+    let note = "";
+    if (me) {
+      try {
+        await db.collection("results").doc(me).set({
+          pairs: PAIRS, female: s.female, clear: s.clear, at: new Date().toISOString(),
+          trials: order.map((t) => ({ sentence: clips[t.clip].text, sadieIs: t.sadieIs, female: t.female, clear: t.clear })),
+        });
+      } catch (e) {
+        note = "Your answers couldn't be added (your access to this page is view-only), so they aren't counted.";
+      }
+    } else note = "Your answers aren't counted because you aren't signed in.";
+    if (!unsub) {
+      unsub = db.collection("results").onSnapshot(
+        (snap) => renderPooled(snap.docs, note),
+        () => { $("pooled").innerHTML = `<p class="note">The shared tally couldn't be loaded. Your own score is above.</p>`; });
+    }
+  }
+
+  // ---------- wiring ----------
+  $("start").addEventListener("click", async () => {
+    $("start").disabled = true;
+    $("loadmsg").textContent = "Loading the first pair…";
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      await ctx.resume();
+      await loadClips();
+      newOrder();
+      await showTrial();
+      $("intro").hidden = true; $("trial").hidden = false;
+    } catch (e) {
+      $("loadmsg").textContent = "The recordings didn't load. Check your connection and press Start again.";
+    }
+    $("start").disabled = false;
+  });
+  $("playA").addEventListener("click", () => onPlay("A"));
+  $("playB").addEventListener("click", () => onPlay("B"));
+  document.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => {
+    order[current][b.dataset.q] = b.dataset.v;
+    refreshAnswers();
+  }));
+  $("next").addEventListener("click", async () => {
+    if (current === PAIRS - 1) { showResults(); return; }
+    current++;
+    $("next").disabled = true;
+    try { await showTrial(); } catch (e) { $("hint").textContent = "This pair didn't load. Press Next again."; current--; $("next").disabled = false; }
+  });
+  $("again").addEventListener("click", async () => {
+    newOrder();
+    $("results").hidden = true; $("trial").hidden = false;
+    window.scrollTo(0, 0);
+    await showTrial();
+  });
+})();
+</script>

@@ -1,0 +1,72 @@
+[
+ {
+  "text": "The weather is lovely this morning.",
+  "sadie82": "audio/s01_sadie82.wav",
+  "sadie82Seconds": 2.33,
+  "sam": "audio/s01_sam.wav",
+  "samSeconds": 2.33
+ },
+ {
+  "text": "Could you please pass me the salt?",
+  "sadie82": "audio/s02_sadie82.wav",
+  "sadie82Seconds": 2.16,
+  "sam": "audio/s02_sam.wav",
+  "samSeconds": 2.16
+ },
+ {
+  "text": "I left my keys on the kitchen table.",
+  "sadie82": "audio/s03_sadie82.wav",
+  "sadie82Seconds": 2.81,
+  "sam": "audio/s03_sam.wav",
+  "samSeconds": 2.81
+ },
+ {
+  "text": "She sells sea shells by the sea shore.",
+  "sadie82": "audio/s04_sadie82.wav",
+  "sadie82Seconds": 2.33,
+  "sam": "audio/s04_sam.wav",
+  "samSeconds": 2.32
+ },
+ {
+  "text": "We should meet again next Tuesday.",
+  "sadie82": "audio/s05_sadie82.wav",
+  "sadie82Seconds": 2.48,
+  "sam": "audio/s05_sam.wav",
+  "samSeconds": 2.48
+ },
+ {
+  "text": "Thank you for calling. How can I help you?",
+  "sadie82": "audio/s06_sadie82.wav",
+  "sadie82Seconds": 3.3,
+  "sam": "audio/s06_sam.wav",
+  "samSeconds": 3.3
+ },
+ {
+  "text": "The train to the city leaves at nine.",
+  "sadie82": "audio/s07_sadie82.wav",
+  "sadie82Seconds": 2.44,
+  "sam": "audio/s07_sam.wav",
+  "samSeconds": 2.44
+ },
+ {
+  "text": "Do you know where the library is?",
+  "sadie82": "audio/s08_sadie82.wav",
+  "sadie82Seconds": 2.33,
+  "sam": "audio/s08_sam.wav",
+  "samSeconds": 2.33
+ },
+ {
+  "text": "My favorite color has always been green.",
+  "sadie82": "audio/s09_sadie82.wav",
+  "sadie82Seconds": 3.43,
+  "sam": "audio/s09_sam.wav",
+  "samSeconds": 3.43
+ },
+ {
+  "text": "Please remember to water the flowers.",
+  "sadie82": "audio/s10_sadie82.wav",
+  "sadie82Seconds": 2.62,
+  "sam": "audio/s10_sam.wav",
+  "samSeconds": 2.62
+ }
+]
