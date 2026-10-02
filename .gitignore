@@ -20,3 +20,4 @@ pico/bench/bench.sym
 
 # copy of web/female_sam.html published as a claude.ai artifact
 web/artifact.html
+_site/

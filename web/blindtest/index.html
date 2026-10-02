@@ -394,7 +394,7 @@
   async function saveAndShowPooled(s) {
     await ready;
     if (!db) {
-      $("pooled").innerHTML = `<p class="note">The shared tally isn't available here (it needs you to be signed in to Claude). Your own score is above.</p>`;
+      $("pooled").innerHTML = `<p class="note">The shared tally isn't available on this copy of the test. It is kept on the claude.ai version, for signed-in listeners. Your own score is above.</p>`;
       return;
     }
     let note = "";

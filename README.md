@@ -1,5 +1,11 @@
 # Female S.A.M.
 
+### ▶ [Try it in your browser](https://catein.github.io/female-software-automatic-mouth/)
+
+**[Open the web player](https://catein.github.io/female-software-automatic-mouth/)**: type any text and hear it as **Female** (Sadie, the new voice), **1982 female** (Sadie '82: the 1982 renderer with female data, as on the Commodore 64 and Raspberry Pi Pico), Male or Original 1982, and tune the voice with live sliders. Everything runs locally in the page (C compiled to WebAssembly), with nothing to install.
+
+Can you tell them apart? Take the **[blind listening test](https://catein.github.io/female-software-automatic-mouth/blindtest/)**: ten pairs of Sadie '82 against the original SAM pitched up to the same average pitch.
+
 A female voice for [SAM (Software Automatic Mouth)](https://github.com/s-macke/SAM), built as a new back end rather than a pitch/throat tweak.
 
 SAM's front end is kept as is: `reciter.c` turns English into phonemes, and `sam.c` plus the first half of `Render()` produce stress, durations, transitions and the pitch contour. At the point where SAM's frame tables are final (`src/render.c`, "The frame tables are final here"), the frames can go to one of two renderers:
@@ -47,7 +53,7 @@ New options:
 
 ## Web page
 
-`web/female_sam.html` is a self-contained page: open it straight from disk in any modern browser. It has four voices: **Female** and **Male** (Klatt), **1982 female** (SAM's own renderer with female data, the same voice as the C64 port and `sam.exe -voice female`) and **Original 1982**. The two 1982 voices synthesize ~8 s of speech in about 1 ms; the Klatt voices take about 27 ms. It runs the same C code as `sam.exe`, compiled to WebAssembly, so values tuned there sound identical from the command line (the page shows the matching `sam.exe` command). The published copy is at https://claude.ai/artifact/QAeWUpvqCHPDwzzZ8Mrfku.
+`web/female_sam.html` is a self-contained page: open it straight from disk in any modern browser. It has four voices: **Female** and **Male** (Klatt), **1982 female** (SAM's own renderer with female data, the same voice as the C64 port and `sam.exe -voice female`) and **Original 1982**. The two 1982 voices synthesize ~8 s of speech in about 1 ms; the Klatt voices take about 27 ms. It runs the same C code as `sam.exe`, compiled to WebAssembly, so values tuned there sound identical from the command line (the page shows the matching `sam.exe` command). It is published at https://catein.github.io/female-software-automatic-mouth/ by `.github/workflows/pages.yml` (via `tools/build_pages.py`) on every push that changes `web/`.
 
 To rebuild it after changing the C code:
 
